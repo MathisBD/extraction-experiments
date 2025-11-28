@@ -1,0 +1,12 @@
+(library
+ (name plugin)
+ (public_name extraction-experiments.plugin)
+ (flags
+  (:standard -warn-error +A -w -27-32-69 -rectypes))
+ (libraries
+  rocq-runtime.vernac
+  rocq-runtime.tactics
+  rocq-runtime.plugins.extraction))
+
+(coq.pp
+ (modules g_plugin))

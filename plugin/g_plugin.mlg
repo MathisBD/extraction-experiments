@@ -1,0 +1,9 @@
+DECLARE PLUGIN "extraction-experiments.plugin"
+
+{
+  open Stdarg
+}
+
+VERNAC COMMAND EXTEND Test CLASSIFIED AS SIDEFF
+| ![opaque_access] [ "Test" ref(t) ] -> { Main.main t }
+END
