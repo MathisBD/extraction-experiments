@@ -1,5 +1,4 @@
-
-
+open MyPlugin.Main
 
 let () =
-  Log.printf "hello world"
+  Log.printf "hello world, using the Log module"

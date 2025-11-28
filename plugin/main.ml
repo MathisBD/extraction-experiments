@@ -13,7 +13,7 @@ end
 let main ~opaque_access (ref : Libnames.qualid) : unit =
   let env = Global.env () in
   let _evm = Evd.from_env env in
-  Dynlink.loadfile "theories/hello.cmxs";
+  Dynlink.loadfile_private "theories/hello.cmxs";
   Log.printf "loaded file"
   (*Extract_env.full_extraction ~opaque_access (Some file) [ ref ];
   Log.printf "Extracted to file \"%s\"" file*)

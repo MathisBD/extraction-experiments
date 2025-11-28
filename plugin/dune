@@ -1,8 +1,8 @@
 (library
- (name plugin)
+ (name MyPlugin)
  (public_name extraction-experiments.plugin)
  (flags
-  (:standard -warn-error +A -w -27-32-69 -rectypes))
+  (:standard -warn-error +A -w -27-32-69))
  (libraries
   rocq-runtime.vernac
   rocq-runtime.tactics
