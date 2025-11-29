@@ -65,5 +65,3 @@ Definition test : unit :=
   eval_M prg (fun _ => tt).
 
 Test test.
-
-Recursive Extraction test.
