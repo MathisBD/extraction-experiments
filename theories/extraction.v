@@ -1,75 +1,69 @@
-From Stdlib Require Import String Extraction.
+From Stdlib Require Import List Extraction PrimString.
+Import ListNotations.
 
-Extract Inductive unit => "unit" [ "()" ].
+Declare ML Module "extraction-experiments.plugin".
+
+(*******************************************************************)
+(** * Setup extraction. *)
+(*******************************************************************)
+
+(** Extraction for primitive integers (required to extract primitive strings). *)
+From Stdlib Require ExtrOCamlInt63.
+
+(** Extraction for basic datatypes. *)
 Extract Inductive bool => "bool" [ "true" "false" ].
-Extract Inductive nat => int [ "0" "succ" ]
-   "(fun fO fS n -> if n = 0 then fO () else fS (n - 1))".
+Extract Inductive option => "option" [ "Some" "None" ].
+Extract Inductive unit => "unit" [ "()" ].
 Extract Inductive list => "list" [ "[]" "(::)" ].
 
-Inductive tag : Prop :=
-| TAG.
+(** Extraction for primitive strings. *)
+Extract Inlined Constant PrimString.string => "Pstring.t".
+Extract Constant PrimString.max_length => "Pstring.max_length".
+Extract Constant PrimString.make => "Pstring.make".
+Extract Constant PrimString.length => "Pstring.length".
+Extract Constant PrimString.get => "Pstring.get".
+Extract Constant PrimString.sub => "Pstring.sub".
+Extract Constant PrimString.cat => "Pstring.cat".
+Extract Constant PrimString.compare => "(fun x y -> let c = Pstring.compare x y in if c = 0 then Eq else if c < 0 then Lt else Gt)".
 
-Inductive scope : Prop :=
-| SNil
-| SCons (s : scope) (x : tag).
+(*******************************************************************)
+(** * Extracting the monad. *)
+(*******************************************************************)
 
-Notation "∅" := SNil.
-Notation "s ▷ x" := (SCons s x) (at level 20, left associativity).
+(** The effect handler for [Print] is written in OCaml. *)
+Parameter ocaml_handle_print : string -> unit.
+Extract Inlined Constant ocaml_handle_print => "MyPlugin.Main.ocaml_handle_print".
 
-Inductive index : scope -> Type :=
-| I0 {s x} : index (s ▷ x)
-| IS {s x} : index s -> index (s ▷ x).
-
-Extraction index.
-
-(* We can extract indices to [int]. *)
-Extract Inductive index => int [ "0" "succ" ]
-   "(fun fO fS n -> if n = 0 then fO () else fS (n - 1))".
-
-Definition evar_id := nat.
-
-Inductive term : scope -> Type :=
-| TType {s} : term s
-| TVar {s} (i : index s) : term s
-| TLam {s} (x : tag) (ty : term s) (body : term (s ▷ x)) : term s
-| TProd {s} (x : tag) (a : term s) (b : term (s ▷ x)) : term s
-| TApp {s} (f : term s) (args : list (term s)) : term s
-| TEvar {s} (e : evar_id) : term s.
-
-Extraction term.
-
-Definition ren (s s' : scope) :=
-  index s -> index s'.
-
-Definition rid {s} : ren s s :=
-  fun i => i.
-
-Definition rshift {s α} : ren s (s ▷ α) :=
-  fun i => IS i.
-
-Definition rcomp {s1 s2 s3} (r1 : ren s1 s2) (r2 : ren s2 s3) : ren s1 s3 :=
-  fun i => r2 (r1 i).
-
-(* This is kind of funny: computationally it's the identity,
-   but not in the types. *)
-Definition replace_tag {s α} (β : tag) : ren (s ▷ α) (s ▷ β).
-  destruct α ; destruct β ; exact rid.
-Defined.
-
-Print replace_tag.
-Extraction replace_tag.
-
+(** The monad. *)
 Inductive M : Type -> Type :=
 | Ret {A} : A -> M A
 | Bind {A B} : M A -> (A -> M B) -> M B
 | Print : string -> M unit.
 
-Extraction M.
+Notation "t >>= f" := (Bind t f) (right associativity, at level 55).
 
-Declare ML Module "extraction-experiments.plugin".
+Definition seq {A B} (t : M A) (u : M B) :=
+  t >>= fun _ => u.
 
-Definition test : nat := 3.
+Notation "t >> u" := (seq t u) (right associativity, at level 55).
 
-Set Extraction Output Directory "./theories".
+Fixpoint eval_M {A} (t : M A) : (A -> unit) -> unit :=
+  match t with
+  | Ret x => fun cont => cont x
+  | Bind t f => fun cont => eval_M t (fun x => eval_M (f x) cont)
+  | Print str => fun cont => cont (ocaml_handle_print str)
+  end.
 
-Test M.
+(*******************************************************************)
+(** * Testing. *)
+(*******************************************************************)
+
+Definition prg :=
+  Print "hello" >> Print "there" >> Print "world!".
+
+Definition test : unit :=
+  eval_M prg (fun _ => tt).
+
+Test test.
+
+Recursive Extraction test.
