@@ -32,7 +32,7 @@ Extract Constant PrimString.compare => "(fun x y -> let c = Pstring.compare x y 
 
 (** The effect handler for [Print] is written in OCaml. *)
 Parameter ocaml_handle_print : string -> unit.
-Extract Inlined Constant ocaml_handle_print => "MyPlugin.Main.ocaml_handle_print".
+Extract Inlined Constant ocaml_handle_print => "MyPlugin.Extraction_interface.ocaml_handle_print".
 
 (** The monad. *)
 Inductive M : Type -> Type :=

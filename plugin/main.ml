@@ -1,10 +1,6 @@
 open Extraction_plugin
 open File_utils
 
-(** Effect handler for [Print]. *)
-let ocaml_handle_print (str : Pstring.t) : unit =
-  Log.printf "%s" (Pstring.to_string str)
-
 (** [with_warning warn f] executes [f ()] with Rocq warning [warn] enabled.
     It resets the warnings afterwards. *)
 let with_warning (warn : string) (f : unit -> 'a) : 'a =
