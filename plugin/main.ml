@@ -31,7 +31,6 @@ let extract ~opaque_access ~dir (ref : Libnames.qualid) : string =
     Returns the name of the created shared library file. *)
 let compile ~dir ~ml_file : string =
   let cmxs_file = Filename.chop_extension ml_file ^ ".cmxs" in
-  let _cd_cmd = Filename.quote_command "cd" [ dir ] in
   let compile_cmd =
     Filename.quote_command
       ~stdout:(dir </> "build.log")
@@ -39,16 +38,14 @@ let compile ~dir ~ml_file : string =
       "ocamlfind"
       [ "ocamlopt"
       ; "-package" ; "extraction-experiments.plugin"
-      ; "-tread"
+      ; "-thread"
       ; "-shared"
       ; "-runtime-variant"; "_pic"
       ; "-o"; cmxs_file
       ; ml_file ]
   in
-  let ret_code =
-    Sys.command (Printf.sprintf "bash -c \"( . '/home/mathis/.opam/opam-init/init.sh' > /dev/null 2> /dev/null) && (eval $(opam env)) && %s\"" compile_cmd)
-  in
-  if ret_code <> 0 then
+  let cmd = Printf.sprintf "cd %s && eval $(opam env) && %s" (Sys.getcwd ()) compile_cmd in
+  if Sys.command cmd <> 0 then
     (* Read the error log. *)
     let error_log =
       try read_file (dir </> "build.err") with _ -> "EMPTY ERROR LOG"
