@@ -10,10 +10,13 @@ val (</>) : string -> string -> string
 val mk_dir : ?allow_exists:bool -> perms:Unix.file_perm -> string -> unit
 
 (** [mk_tmp_dir name] creates a temporary directory with
-    name [${tmp}/${name}/${time}_${rand}] where:
+    name [${tmp}/${name}_${rand}_${time}] where:
     - [tmp] is the temporary directory (e.g. /tmp on linux).
-    - [time] is the current time in format [HHMMSS].
     - [rand] is a random number to ensure uniqueness.
+    - [time] is the current time in format [HHMMSS].
 
     It returns the name of the created directory. *)
 val mk_tmp_dir : string -> string
+
+(** [read_file file] reads the entire contents of [file]. *)
+val read_file : string -> string

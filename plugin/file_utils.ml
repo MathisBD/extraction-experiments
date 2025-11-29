@@ -18,12 +18,18 @@ let rec mk_dir ?(allow_exists = true) ~(perms:file_perm) (name : string) : unit 
 
 let mk_tmp_dir (name : string) : string =
   let time = localtime (time ()) in
-  let rand = Random.State.(bits (make_self_init ()) land 0xFFFFFF) in
-  let name =
-    Filename.get_temp_dir_name () </>
-    name </>
-    (Printf.sprintf "%02dh%02dm%02ds_%06x" time.tm_hour time.tm_min time.tm_sec rand)
+  let cmd =
+    Printf.sprintf "mktemp -d --tmpdir %s_XXXXXX_%02dh%02dm%02ds"
+      name time.tm_hour time.tm_min time.tm_sec
   in
-  (* TODO: try several times with different random numbers. *)
-  mk_dir ~allow_exists:false ~perms:0o755 name;
-  name
+  let chan = Unix.open_process_in cmd in
+  let name = input_line chan in
+  match Unix.close_process_in chan with
+  | Unix.WEXITED 0 -> name
+  | _ -> Log.error "Plugin error: failed to create temporary directory with base name %s" name
+
+let read_file (name : string) : string =
+  let chan = In_channel.open_text name in
+  let contents = In_channel.input_all chan in
+  In_channel.close chan;
+  contents
