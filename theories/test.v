@@ -1,10 +1,9 @@
-From Stdlib Require Import List Extraction PrimString.
-Import ListNotations.
+From Stdlib Require Import Extraction PrimString.
 
 Declare ML Module "extraction-experiments.plugin".
 
 (*******************************************************************)
-(** * Setup extraction. *)
+(** * Extraction for built-in datatypes. *)
 (*******************************************************************)
 
 (** Extraction for primitive integers (required to extract primitive strings). *)
@@ -16,7 +15,20 @@ Extract Inductive option => "option" [ "Some" "None" ].
 Extract Inductive unit => "unit" [ "()" ].
 Extract Inductive list => "list" [ "[]" "(::)" ].
 
-(** Extraction for primitive strings. *)
+(** Extract [nat] to primitive integers. *)
+Extract Inductive nat => "int" [ "0" "Stdlib.Int.succ" ]
+  "MyPlugin.Extraction.nat_elim".
+Extract Constant Nat.pred => "Stdlib.Int.pred".
+Extract Constant Nat.add => "Stdlib.Int.add".
+Extract Constant Nat.sub => "MyPlugin.Extraction.nat_sub".
+Extract Constant Nat.mul => "Stdlib.Int.mul".
+Extract Constant Nat.min => "Stdlib.Int.min".
+Extract Constant Nat.max => "Stdlib.Int.max".
+
+(** Extraction for primitive strings.
+    We don't use [ExtrOCamlPString] because we want to extract [string]
+    to [Pstring.t] using an inline directive, so that we don't redefine
+    the built-in [string] datatype of OCaml. *)
 Extract Inlined Constant PrimString.string => "Pstring.t".
 Extract Constant PrimString.max_length => "Pstring.max_length".
 Extract Constant PrimString.make => "Pstring.make".
@@ -24,7 +36,8 @@ Extract Constant PrimString.length => "Pstring.length".
 Extract Constant PrimString.get => "Pstring.get".
 Extract Constant PrimString.sub => "Pstring.sub".
 Extract Constant PrimString.cat => "Pstring.cat".
-Extract Constant PrimString.compare => "(fun x y -> let c = Pstring.compare x y in if c = 0 then Eq else if c < 0 then Lt else Gt)".
+Extract Constant PrimString.compare =>
+  "(fun x y -> let c = Pstring.compare x y in if c = 0 then Eq else if c < 0 then Lt else Gt)".
 
 (*******************************************************************)
 (** * Extracting the monad. *)
@@ -32,7 +45,7 @@ Extract Constant PrimString.compare => "(fun x y -> let c = Pstring.compare x y 
 
 (** The effect handler for [Print] is written in OCaml. *)
 Parameter ocaml_handle_print : string -> unit.
-Extract Inlined Constant ocaml_handle_print => "MyPlugin.Extraction_interface.ocaml_handle_print".
+Extract Inlined Constant ocaml_handle_print => "MyPlugin.Extraction.ocaml_handle_print".
 
 (** The monad. *)
 Inductive M : Type -> Type :=
