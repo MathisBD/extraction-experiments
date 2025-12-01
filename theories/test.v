@@ -40,41 +40,105 @@ Extract Constant PrimString.compare =>
   "(fun x y -> let c = Pstring.compare x y in if c = 0 then Eq else if c < 0 then Lt else Gt)".
 
 (*******************************************************************)
-(** * Extracting the monad. *)
+(** * Interaction trees. *)
 (*******************************************************************)
 
-(** The effect handler for [Print] is written in OCaml. *)
-Parameter ocaml_handle_print : string -> unit.
-Extract Inlined Constant ocaml_handle_print => "MyPlugin.Extraction.ocaml_handle_print".
+Inductive hitree (E : Type -> Type) : Type -> Type :=
+| Ret {A} : A -> hitree E A
+| Bind {A B} : hitree E A -> (A -> hitree E B) -> hitree E B
+| Vis {A} : E A -> hitree E A.
 
-(** The monad. *)
-Inductive M : Type -> Type :=
-| Ret {A} : A -> M A
-| Bind {A B} : M A -> (A -> M B) -> M B
-| Print : string -> M unit.
+Arguments Ret {E A}.
+Arguments Bind {E A B}.
+Arguments Vis {E A}.
 
 Notation "t >>= f" := (Bind t f) (right associativity, at level 55).
 
-Definition seq {A B} (t : M A) (u : M B) :=
+Definition seq {E A B} (t : hitree E A) (u : hitree E B) : hitree E B :=
   t >>= fun _ => u.
 
 Notation "t >> u" := (seq t u) (right associativity, at level 55).
 
-Fixpoint eval_M {A} (t : M A) : (A -> unit) -> unit :=
+(** Sum of effects. *)
+Variant sumE (E1 E2 : Type -> Type) (A : Type) : Type :=
+| sumE_l (e : E1 A)
+| sumE_r (e : E2 A).
+
+Arguments sumE_l {E1 E2 A}.
+Arguments sumE_r {E1 E2 A}.
+
+Notation "E +' F" := (sumE E F) (at level 60, right associativity).
+
+(** Print effect. *)
+Variant printE : Type -> Type :=
+| Print (s : string) : printE unit.
+
+(** Failure effect. *)
+Variant failE : Type -> Type :=
+| Fail {A} (s : string) : failE A.
+
+(*******************************************************************)
+(** * Extracting the monad. *)
+(*******************************************************************)
+
+Section RunHItree.
+  Context (E : Type -> Type).
+  Context (ocaml_handle_E : forall A, E A -> A).
+
+  Fixpoint ocaml_run_hitree {A} (t : hitree E A) : (A -> unit) -> unit :=
   match t with
   | Ret x => fun cont => cont x
-  | Bind t f => fun cont => eval_M t (fun x => eval_M (f x) cont)
-  | Print str => fun cont => cont (ocaml_handle_print str)
+  | Bind t f => fun cont => ocaml_run_hitree t (fun x => ocaml_run_hitree (f x) cont)
+  | Vis e => fun cont => cont (ocaml_handle_E _ e)
+  end.
+
+End RunHItree.
+
+(** The effect handler for [Print] in OCaml. *)
+Parameter ocaml_handle_Print : string -> unit.
+Extract Inlined Constant ocaml_handle_Print => "MyPlugin.Extraction.handle_Print".
+
+Definition ocaml_handle_printE {A} (e : printE A) : A :=
+  match e with
+  | Print s => ocaml_handle_Print s
+  end.
+
+(** The effect handler for [Fail] in OCaml. *)
+Parameter ocaml_handle_Fail : forall A, string -> A.
+Extract Inlined Constant ocaml_handle_Fail => "MyPlugin.Extraction.handle_Fail".
+
+Definition ocaml_handle_failE {A} (e : failE A) : A :=
+  match e with
+  | Fail s => ocaml_handle_Fail _ s
   end.
 
 (*******************************************************************)
 (** * Testing. *)
 (*******************************************************************)
 
-Definition prg :=
-  Print "hello" >> Print "there" >> Print "world!".
+(** A concrete effect. *)
+Inductive E (A : Type) : Type :=
+| Wrap : (printE +' failE) A -> E A.
+
+Arguments Wrap {A}.
+
+(** Handle [E] in ocaml. *)
+Definition ocaml_handle_E {A} (e : E A) : A :=
+  match e with
+  | Wrap (sumE_l e) => ocaml_handle_printE e
+  | Wrap (sumE_r e) => ocaml_handle_failE e
+  end.
+
+Definition print (s : string) : hitree E unit :=
+  Vis (Wrap (sumE_l (Print s))).
+
+Definition fail {A} (s : string) : hitree E A :=
+  Vis (Wrap (sumE_r (Fail s))).
+
+Definition prg : hitree E unit :=
+  print "hello" >> print "world!" >> fail "Program failed: we are done !!".
 
 Definition test : unit :=
-  eval_M prg (fun _ => tt).
+  ocaml_run_hitree E (@ocaml_handle_E) prg (fun _ => tt).
 
 Test test.

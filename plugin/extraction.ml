@@ -10,5 +10,9 @@ let nat_elim (fO : unit -> 'a) (fS : int -> int) (n : int) : 'a =
   if n = 0 then fO () else fS (n - 1)
 
 (** Effect handler for [Print]. *)
-let ocaml_handle_print (str : Pstring.t) : unit =
+let handle_Print (str : Pstring.t) : unit =
   Log.printf "%s" (Pstring.to_string str)
+
+(** Effect handler for [Fail]. *)
+let handle_Fail (str : Pstring.t) : 'a =
+  Log.error "%s" (Pstring.to_string str)

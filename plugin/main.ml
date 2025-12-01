@@ -54,10 +54,25 @@ let compile ~dir ~ml_file : string =
       ml_file error_log
   else cmxs_file
 
+(** [is_exn_allowed e] returns [true] if exception [e] is allowed to be raised
+    when executing the extracted code. *)
+let is_exn_allowed (e : exn) : bool =
+  match e with
+  | CErrors.UserError _ -> true
+  | _ -> false
+
 (** Dynamically link the shared library we compiled. *)
 let link ~cmxs_file : unit =
   try Dynlink.loadfile_private cmxs_file with
-  | _ -> Log.error "Plugin error: failed to dynamically link OCaml shared library %s" cmxs_file
+  (* We allow the linked program to raise some specific errors. *)
+  | Dynlink.Error (Library's_module_initializers_failed e) when is_exn_allowed e ->
+    raise e
+  (* Any other error is unexpected.
+     As indicated in the documentation of CErrors we don't catch critical errors. *)
+  | e when CErrors.noncritical e ->
+    let err_msg = Printexc.to_string e in
+    let err_trace = Printexc.get_backtrace () in
+    Log.error "Plugin error: dynamic linking error:\n%s%s" err_msg err_trace
 
 (** Extract, compile, and link the constant [ref]. *)
 let main ~opaque_access (ref : Libnames.qualid) : unit =
