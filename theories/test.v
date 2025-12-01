@@ -2,6 +2,8 @@ From Stdlib Require Import Nat Extraction PrimString.
 
 Declare ML Module "extraction-experiments.plugin".
 
+Notation "f '$' x" := (f x) (at level 67, right associativity, only parsing).
+
 (*******************************************************************)
 (** * Extraction for built-in datatypes. *)
 (*******************************************************************)
@@ -54,12 +56,12 @@ Arguments Ret {E A}.
 Arguments Bind {E A B}.
 Arguments Vis {E A}.
 
-Notation "t >>= f" := (Bind t f) (right associativity, at level 55).
+Notation "t >>= f" := (Bind t f) (right associativity, at level 70).
 
 Definition seq {E A B} (t : hitree E A) (u : hitree E B) : hitree E B :=
   t >>= fun _ => u.
 
-Notation "t >> u" := (seq t u) (right associativity, at level 55).
+Notation "t >> u" := (seq t u) (right associativity, at level 70).
 
 (** Sum of effects. *)
 Variant sumE (E1 E2 : Type -> Type) (A : Type) : Type :=
@@ -100,53 +102,13 @@ Inductive fuel :=
     out of fuel in OCaml! *)
 Extract Inductive fuel => "unit" [ "()" "(fun _ -> ())" ] "(fun f0 f1 _ -> f1 ())".
 
-(*Section RunHItree.
-  Context (E : Type -> Type).
-  Context (ocaml_handle_E : forall A, E A -> A).
-
-  Fixpoint ocaml_run_hitree {A} (t : hitree E A) : (A -> unit) -> unit :=
-    match t with
-    | Ret x => fun cont => cont x
-    | Bind t f => fun cont => ocaml_run_hitree t (fun x => ocaml_run_hitree (f x) cont)
-    | Vis e => fun cont => cont (ocaml_handle_E _ e)
-    end.
-
-End RunHItree.*)
-
 (** The effect handler for [Print] in OCaml. *)
 Parameter ocaml_handle_Print : string -> unit.
 Extract Inlined Constant ocaml_handle_Print => "MyPlugin.Extraction.handle_Print".
 
-Definition ocaml_handle_printE {A} (e : printE A) : A :=
-  match e with
-  | Print s => ocaml_handle_Print s
-  end.
-
 (** The effect handler for [Fail] in OCaml. *)
 Parameter ocaml_handle_Fail : forall A, string -> A.
 Extract Inlined Constant ocaml_handle_Fail => "MyPlugin.Extraction.handle_Fail".
-
-Definition ocaml_handle_failE {A} (e : failE A) : A :=
-  match e with
-  | Fail s => ocaml_handle_Fail _ s
-  end.
-
-Section HandleIter.
-  Context (E : Type -> Type).
-  Context (ocaml_handle_hitree : forall A, hitree E A -> (A -> unit) -> unit).
-
-  Fixpoint ocaml_handle_iterE (n : fuel) {A} (e : iterE E A) : (A -> unit) -> unit :=
-    match n with NoFuel => (fun _ => tt) | OneMoreFuel n =>
-    match e with
-    | Iter init step => fun cont =>
-      ocaml_handle_hitree _ (step init) (fun ab =>
-        match ab with
-        | inl a => ocaml_handle_iterE n (Iter a step) cont
-        | inr b => cont b
-        end)
-    end
-    end.
-End HandleIter.
 
 (*******************************************************************)
 (** * Testing. *)
@@ -154,42 +116,59 @@ End HandleIter.
 
 (** A concrete effect. *)
 Inductive E (A : Type) : Type :=
-| Wrap : (printE +' failE +' iterE E) A -> E A.
+| E_printE (e : printE A)
+| E_failE (e : failE A)
+| E_iterE (e : iterE E A).
 
-Arguments Wrap {A}.
+Arguments E_printE {A}.
+Arguments E_failE {A}.
+Arguments E_iterE {A}.
 
-(** Handle [E] in ocaml. *)
-Definition ocaml_handle_E {A} (run_hitree : forall A, hitree E A -> (A -> unit) -> unit)
-  (e : E A) : (A -> unit) -> unit :=
-  match e with
-  | Wrap (sumE_l e) => fun k => k (ocaml_handle_printE e)
-  | Wrap (sumE_r (sumE_l e)) => fun k => k (ocaml_handle_failE e)
-  | Wrap (sumE_r (sumE_r e)) => fun k => ocaml_handle_iterE E run_hitree NoFuel e k
-  end.
+Definition print (s : string) : hitree E unit :=
+  Vis $ E_printE $ Print s.
 
+Definition fail {A} (s : string) : hitree E A :=
+  Vis $ E_failE $ Fail s.
+
+Definition iter {A B} (init : A) (step : A -> hitree E (A + B)) : hitree E B :=
+  Vis $ E_iterE $ Iter init step.
+
+(** Run an hitree computation with effect [E]. *)
 Fixpoint ocaml_run_hitree (n : fuel) {A} (t : hitree E A) : (A -> unit) -> unit :=
   match n with NoFuel => (fun _ => tt) | OneMoreFuel n =>
   match t with
+  (* Ret. *)
   | Ret x => fun k => k x
+  (* Bind. *)
   | Bind t f => fun k => ocaml_run_hitree n t (fun x => ocaml_run_hitree n (f x) k)
-  | Vis e => fun k => ocaml_handle_E (@ocaml_run_hitree n) e k
+  (* Print effect. *)
+  | Vis (E_printE e) =>
+    match e with
+    | Print s => fun k => k $ ocaml_handle_Print s
+    end
+  (* Failure effect. *)
+  | Vis (E_failE e) =>
+    match e with
+    | Fail s => fun k => k (ocaml_handle_Fail _ s)
+    end
+  (* Iteration effect. *)
+  | Vis (E_iterE e) =>
+    match e with
+    | Iter init step => fun k =>
+      ocaml_run_hitree n (step init) (fun ab =>
+        match ab with
+        | inl a => ocaml_run_hitree n (Vis $ E_iterE $ Iter a step) k
+        | inr b => k b
+        end)
+    end
   end
   end.
-
-Definition print (s : string) : hitree E unit :=
-  Vis (Wrap (sumE_l (Print s))).
-
-Definition fail {A} (s : string) : hitree E A :=
-  Vis (Wrap (sumE_r (sumE_l (Fail s)))).
-
-Definition iter {A B} (init : A) (step : A -> hitree E (A + B)) : hitree E B :=
-  Vis (Wrap (sumE_r (sumE_r (Iter init step)))).
 
 Definition for_ (start stop : nat) (body : nat -> hitree E unit) : hitree E unit :=
   iter start (fun i =>
     if Nat.leb i stop
-    then body i >> Ret (inl (i + 1))
-    else Ret (inr tt)).
+    then body i >> Ret $ inl (i + 1)
+    else Ret $ inr tt).
 
 Definition prg : hitree E unit :=
   for_ 1 5 (fun _ => print "hello") >> print "done".
