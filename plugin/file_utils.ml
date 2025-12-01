@@ -19,7 +19,7 @@ let rec mk_dir ?(allow_exists = true) ~(perms:file_perm) (name : string) : unit 
 let mk_tmp_dir (name : string) : string =
   let time = localtime (time ()) in
   let cmd =
-    Printf.sprintf "mktemp -d --tmpdir %s_XXXXXX_%02dh%02dm%02ds"
+    Printf.sprintf "mktemp -d --tmpdir %s_%02dh%02dm%02ds_XXXXXX"
       name time.tm_hour time.tm_min time.tm_sec
   in
   let chan = Unix.open_process_in cmd in
