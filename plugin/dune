@@ -6,7 +6,8 @@
  (libraries
   rocq-runtime.vernac
   rocq-runtime.tactics
-  rocq-runtime.plugins.extraction))
+  rocq-runtime.plugins.extraction
+  pvec))
 
 (coq.pp
  (modules g_plugin))

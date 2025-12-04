@@ -10,4 +10,7 @@
  (name extraction-experiments)
  (maintainers "Mathis Bouverot-Dupuis (mathis.bouverot@ens.psl.eu)")
  (authors "Mathis Bouverot-Dupuis")
- (synopsis "Extraction experiments"))
+ (synopsis "Extraction experiments")
+ (depends
+   (rocq-prover (= 9.0.0))
+   pvec))
