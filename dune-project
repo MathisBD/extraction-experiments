@@ -13,4 +13,5 @@
  (synopsis "Extraction experiments")
  (depends
    (rocq-prover (= 9.0.0))
+   rocq-equations
    pvec))

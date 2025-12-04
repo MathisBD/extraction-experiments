@@ -1,8 +1,10 @@
-From Metaprog Require Export Prelude Hitree Loader.
+From Metaprog Require Export Prelude Hitree.
 
 (** This file specifies how to extract and run interaction trees.
     It makes heavy use of OCaml constants and functions defined
     in the plugin (file "plugin/extraction.ml"). *)
+
+Declare ML Module "extraction-experiments.plugin".
 
 (*******************************************************************)
 (** * Extraction for built-in datatypes. *)

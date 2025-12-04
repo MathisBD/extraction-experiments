@@ -6,6 +6,7 @@ authors: ["Mathis Bouverot-Dupuis"]
 depends: [
   "dune" {>= "3.16"}
   "rocq-prover" {= "9.0.0"}
+  "rocq-equations"
   "pvec"
   "odoc" {with-doc}
 ]
