@@ -1,4 +1,4 @@
-From Metaprog Require Export Prelude Hitree.
+From Metaprog Require Export Prelude Hitree Term.
 
 (** This file specifies how to extract and run interaction trees.
     It makes heavy use of OCaml constants and functions defined
@@ -44,7 +44,7 @@ Extract Constant PrimString.compare =>
   "(fun x y -> let c = Pstring.compare x y in if c = 0 then Eq else if c < 0 then Lt else Gt)".
 
 (*******************************************************************)
-(** * Extraction for mutable vectors. *)
+(** * Extraction for persistent vectors. *)
 (*******************************************************************)
 
 (** This module defines persistent vectors [Vec.t A] on elements of type [A].
@@ -72,6 +72,26 @@ Module Vec.
   Extract Inlined Constant length => "MyPlugin.Extraction.Vec.length".
 
 End Vec.
+
+(*******************************************************************)
+(** * Extraction for terms. *)
+(*******************************************************************)
+
+(** We extract scopes to [int]. In the future we should
+    mark [scope] as [Ghost] to have it erased entirely by extraction. *)
+Extract Inductive scope => "int" [ "0" "Stdlib.Int.succ" ]
+  "MyPlugin.Extraction.nat_elim".
+
+Extract Inductive index => "MyPlugin.Extraction.index"
+  [ "MyPlugin.Extraction.I0" "MyPlugin.Extraction.I0" ].
+
+Extract Inductive term => "MyPlugin.Extraction.term"
+  [ "MyPlugin.Extraction.TType"
+    "MyPlugin.Extraction.TVar"
+    "MyPlugin.Extraction.TLam"
+    "MyPlugin.Extraction.TProd"
+    "MyPlugin.Extraction.TApp"
+    "MyPlugin.Extraction.TEvar" ].
 
 (*******************************************************************)
 (** * Extracting the monad. *)

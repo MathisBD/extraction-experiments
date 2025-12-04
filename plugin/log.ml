@@ -12,3 +12,7 @@ let error ?(loc : Loc.t option) fmt =
 (** Print an [EConstr.t] to a string. *)
 let show_econstr env sigma t : string =
   Pp.string_of_ppcmds @@ Printer.pr_econstr_env env sigma t
+
+(** Print the raw representation of a [Constr.t] to a string. *)
+let show_constr_raw t : string =
+  Pp.string_of_ppcmds @@ Constr.debug_print t

@@ -4,10 +4,13 @@ From Metaprog Require Export Prelude.
 (** * Scopes and de Bruijn indices. *)
 (***********************************************************************)
 
-Inductive tag :=
+(** We put tags in [Prop] so that they are erased by extraction.
+    In the future we should put [tag] and [scope] in [Ghost]
+    so that both get erased by extraction. *)
+Inductive tag : Prop :=
 | TAG.
 
-Inductive scope :=
+Inductive scope : Set :=
 | SNil
 | SCons (s : scope) (x : tag).
 
