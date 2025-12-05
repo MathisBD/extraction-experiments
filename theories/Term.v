@@ -1,4 +1,4 @@
-From Metaprog Require Export Prelude.
+From Metaprog Require Import Prelude.
 
 (***********************************************************************)
 (** * Scopes and de Bruijn indices. *)

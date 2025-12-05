@@ -1,4 +1,8 @@
-From Metaprog Require Import RunHitree.
+From Stdlib Require Strings.PrimString.
+From Metaprog Require Import Hitree RunHitree.
+
+Import PrimString.PStringNotations.
+Open Scope pstring_scope.
 
 (*******************************************************************)
 (** * Concrete effect. *)
@@ -47,8 +51,8 @@ Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (entry E)) (t : hitree E A)
     | Iter init step =>
       let ab := ocaml_run_hitree n fs (step init) in
       match ab with
-      | inl a => ocaml_run_hitree n fs (Vis $ E_iterE $ Iter a step)
-      | inr b => b
+      | Continue a => ocaml_run_hitree n fs (iter a step)
+      | Break b => b
       end
     end
   (* Recursion effect. *)
@@ -62,7 +66,7 @@ Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (entry E)) (t : hitree E A)
     (* Call: Lookup the function in the environment. *)
     | Call x a =>
       let e := Vec.get fs x in
-      ocaml_run_hitree n fs (ocaml_obj_magic $ entry_fun e $ ocaml_obj_magic a)
+      ocaml_run_hitree n fs (ocaml_obj_magic (entry_fun e (ocaml_obj_magic a)))
     end
   end
   end.
@@ -76,13 +80,13 @@ Definition prg : hitree E unit :=
   print "done".
 
 Definition prg_rec : hitree E unit :=
-  let loop := fix_ $ fun loop i =>
+  letrec loop i :=
     if Nat.ltb i 5 then print "hello" >> loop (i + 1)
     else Ret tt
   in
   loop 1.
 
 Definition test : unit :=
-  ocaml_run_hitree NoFuel (Vec.empty tt) prg.
+  ocaml_run_hitree NoFuel (Vec.empty tt) prg_rec.
 
 Test test.

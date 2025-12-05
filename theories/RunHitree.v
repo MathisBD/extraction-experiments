@@ -1,4 +1,4 @@
-From Metaprog Require Export Prelude Hitree Term.
+From Metaprog Require Import Prelude Hitree Term.
 
 (** This file specifies how to extract and run interaction trees.
     It makes heavy use of OCaml constants and functions defined

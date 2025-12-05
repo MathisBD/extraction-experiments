@@ -1,6 +1,8 @@
-From Stdlib Require Bool Nat List.
+From Stdlib Require Export Bool Nat List.
 From Stdlib Require Export PrimString.
 From Equations Require Export Equations.
+
+Export PrimString.PStringNotations.
 Export List.ListNotations.
 
 (** Right-associative function application. *)
