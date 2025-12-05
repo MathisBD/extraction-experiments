@@ -29,8 +29,8 @@ Instance subeffect_recE : recE E -< E := { inj_effect := @E_recE }.
 Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (entry E)) (t : hitree E A) : A :=
   match n with NoFuel => ocaml_handle_Fail _ "ocaml_run_hitree: out of fuel (should not happen)" | OneMoreFuel n =>
   match t with
-  (* Ret. *)
-  | Ret x => x
+  (* Return. *)
+  | Return x => x
   (* Bind. *)
   | Bind t f =>
     let x := ocaml_run_hitree n fs t in
@@ -82,7 +82,7 @@ Definition prg : hitree E unit :=
 Definition prg_rec : hitree E unit :=
   letrec loop i :=
     if Nat.ltb i 5 then print "hello" >> loop (i + 1)
-    else Ret tt
+    else ret tt
   in
   loop 1.
 
