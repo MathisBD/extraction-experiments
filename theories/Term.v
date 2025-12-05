@@ -17,12 +17,12 @@ Inductive scope : Set :=
 Derive NoConfusion for scope.
 
 (** [∅] is the empty scope: it contains no variables. *)
-Notation "∅" := SNil.
+Global Notation "∅" := SNil.
 
 (** [s ▷ x] is the scope [s] extended with one variable [x].
     You can use index [I0] to refer to [x] and [IS] to refer
     to variables in [s]. *)
-Notation "s ▷ x" := (SCons s x) (at level 20, left associativity).
+Global Notation "s ▷ x" := (SCons s x) (at level 20, left associativity).
 
 (** [index s] is the type of de Bruijn indices in scope [s].
     You can think of an index as a natural number which
@@ -272,7 +272,7 @@ Definition scomp {s1 s2 s3} (σ1 : subst s1 s2) (σ2 : subst s2 s3) : subst s1 s
 
 (** [t[x := u]] substitutes variable [x] with [u] in [t].
     It assumes the scope of [t] is of the form [_ ▷ x]. *)
-Notation "t [ x := u ]" := (substitute (@scons _ _ x u sid) t) (at level 10, only parsing).
+Global Notation "t [ x := u ]" := (substitute (@scons _ _ x u sid) t) (at level 10, only parsing).
 
 (***********************************************************************)
 (** * Smart constructors. *)
