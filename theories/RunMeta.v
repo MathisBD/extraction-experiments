@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude Hitree Term.
+From Metaprog Require Import Prelude MetaMonad Term.
 
 (** This file specifies how to extract and run interaction trees.
     It makes heavy use of OCaml constants and functions defined
@@ -121,10 +121,10 @@ Parameter ocaml_handle_Fail : forall A, string -> A.
 Extract Inlined Constant ocaml_handle_Fail => "MyPlugin.Extraction.handle_Fail".
 
 (** Entry for a recursive function. *)
-Record entry (E : Type -> Type) := mk_entry {
+Record fun_entry (E : Type -> Type) := mk_entry {
   entry_dom : Type ;
   entry_codom : Type ;
-  entry_fun : entry_dom -> hitree E entry_codom
+  entry_fun : entry_dom -> meta E entry_codom
 }.
 
 Arguments entry_dom {E}.

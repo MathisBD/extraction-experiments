@@ -1,23 +1,24 @@
 From Metaprog Require Import Prelude Term.
 
-(** This file defines (higher-order) interaction trees. *)
+(** This file defines the meta-programming monad [meta],
+    based on (higher-order) interaction trees. *)
 
 (*******************************************************************)
-(** * Interaction trees. *)
+(** * Meta-programming monad. *)
 (*******************************************************************)
 
-(** [hitree E A] is an _interaction tree_: it represents a computation
-    with return value in [A] and using the set of effects [E]. *)
-Inductive hitree (E : Type -> Type) : Type -> Type :=
-| Return {A} : A -> hitree E A
-| Bind {A B} : hitree E A -> (A -> hitree E B) -> hitree E B
-| Vis {A} : E A -> hitree E A.
+(** [meta E A] represents a computation with return value in [A]
+    and using the set of effects [E]. *)
+Inductive meta (E : Type -> Type) : Type -> Type :=
+| Return {A} : A -> meta E A
+| Bind {A B} : meta E A -> (A -> meta E B) -> meta E B
+| Vis {A} : E A -> meta E A.
 
 Arguments Return {E A}.
 Arguments Bind {E A B}.
 Arguments Vis {E A}.
 
-Definition ret {E A} (a : A) : hitree E A := Return a.
+Definition ret {E A} (a : A) : meta E A := Return a.
 
 Notation "t >>= f" := (Bind t f)
   (right associativity, at level 70, only parsing).
@@ -25,19 +26,21 @@ Notation "t >>= f" := (Bind t f)
 Notation "'let*' x ':=' t 'in' f" := (Bind t (fun x => f))
   (no associativity, at level 200, x binder).
 
-Definition seq {E A B} (t : hitree E A) (u : hitree E B) : hitree E B :=
+(** [seq t u] or [t >> u] executes [t], discards its result, then executes [u]. *)
+Definition seq {E A B} (t : meta E A) (u : meta E B) : meta E B :=
   t >>= fun _ => u.
 
 Notation "t >> u" := (seq t u)
   (right associativity, at level 70, only parsing).
 
-Definition fmap {E A B} (f : A -> B) (t : hitree E A) : hitree E B :=
+(** [fmap f t] or [f <$> t] executes [t] and applies [f] to its result. *)
+Definition fmap {E A B} (f : A -> B) (t : meta E A) : meta E B :=
   let* x := t in ret (f x).
 
 Notation "f <$> t" := (fmap f t)
   (no associativity, at level 70, only parsing).
 
-(** [SubEffect E F], also written [E -< F], means that [E] is a
+(** [SubEffect E F] or [E -< F] means that [E] is a
     sub-effect of [F]: every event [e : E A] can be cast to an event [F A]. *)
 Class SubEffect (E F : Type -> Type) := {
   inj_effect : forall A, E A -> F A
@@ -47,7 +50,7 @@ Arguments inj_effect {E F _ A}.
 
 Notation "E '-<' F" := (SubEffect E F) (at level 60, no associativity).
 
-Definition trigger {E F A} `{E -< F} (e : E A) : hitree F A :=
+Definition trigger {E F A} `{E -< F} (e : E A) : meta F A :=
   Vis (inj_effect e).
 
 (*******************************************************************)
@@ -59,7 +62,7 @@ Variant printE : Type -> Type :=
 
 (** [print msg] prints the string [msg]. A newline is automatically inserted
     at the end of the string. *)
-Definition print {E} `{printE -< E} (s : string) : hitree E unit :=
+Definition print {E} `{printE -< E} (s : string) : meta E unit :=
   trigger (Print s).
 
 (*******************************************************************)
@@ -70,7 +73,7 @@ Variant failE : Type -> Type :=
 | Fail {A} (s : string) : failE A.
 
 (** [fail msg] crashes the program with error message [msg]. *)
-Definition fail {E A} `{failE -< E} (s : string) : hitree E A :=
+Definition fail {E A} `{failE -< E} (s : string) : meta E A :=
   trigger (Fail s).
 
 (*******************************************************************)
@@ -90,23 +93,23 @@ Arguments Break {A R}.
 
 (** The effect [iterE] allows one to write (unbounded) loops, e.g. for-loops. *)
 Variant iterE (E : Type -> Type) : Type -> Type :=
-| Iter {A R} (init : A) (step : A -> hitree E (iter_step A R)) : iterE E R.
+| Iter {A R} (init : A) (step : A -> meta E (iter_step A R)) : iterE E R.
 
 Arguments Iter {E A R}.
 
 Definition iter {E A R} `{iterE E -< E} (init : A)
-    (step : A -> hitree E (iter_step A R)) : hitree E R :=
+    (step : A -> meta E (iter_step A R)) : meta E R :=
   trigger (Iter init step).
 
-Definition continue {E A R} `{iterE E -< E} (acc : A) : hitree E (iter_step A R) :=
+Definition continue {E A R} `{iterE E -< E} (acc : A) : meta E (iter_step A R) :=
   ret $ Continue acc.
 
-Definition break {E A R} `{iterE E -< E} (res : R) : hitree E (iter_step A R) :=
+Definition break {E A R} `{iterE E -< E} (res : R) : meta E (iter_step A R) :=
   ret $ Break res.
 
 (** [for_ start stop body] is a for-loop: it is equivalent to
     [body start >> body (start + 1) >> .. >> body stop]. Note that both bounds are included. *)
-Definition for_ {E} `{iterE E -< E} (start stop : nat) (body : nat -> hitree E unit) : hitree E unit :=
+Definition for_ {E} `{iterE E -< E} (start stop : nat) (body : nat -> meta E unit) : meta E unit :=
   iter start (fun i =>
     if Nat.leb i stop then body i >> continue (i + 1) else break tt).
 
@@ -119,19 +122,19 @@ Notation "'for' i '=' start 'to' stop 'do' body" := (for_ start stop (fun i => b
 (*******************************************************************)
 
 Variant recE (E : Type -> Type) : Type -> Type :=
-| MkFix {A B} (F : nat -> A -> hitree E B) (a : A) : recE E B
+| MkFix {A B} (F : nat -> A -> meta E B) (a : A) : recE E B
 | Call {A B} (x : nat) (a : A) : recE E B.
 
 Arguments MkFix {E A B}.
 Arguments Call {E A B}.
 
-Definition mkfix {E A B} `{recE E -< E} (F : nat -> A -> hitree E B) (a : A) : hitree E B :=
+Definition mkfix {E A B} `{recE E -< E} (F : nat -> A -> meta E B) (a : A) : meta E B :=
   trigger (MkFix F a).
 
-Definition call {E A B} `{recE E -< E} (x : nat) (a : A) : hitree E B :=
+Definition call {E A B} `{recE E -< E} (x : nat) (a : A) : meta E B :=
   trigger (Call x a).
 
-Definition fix_ {E A B} `{recE E -< E} (F : (A -> hitree E B) -> (A -> hitree E B)) (a : A) : hitree E B :=
+Definition fix_ {E A B} `{recE E -< E} (F : (A -> meta E B) -> (A -> meta E B)) (a : A) : meta E B :=
   mkfix (fun x a => F (call x) a) a.
 
 (** Notation to build a recursive function with one argument. *)
@@ -160,15 +163,15 @@ Section EvarOperations.
   Context {E} `{evarE -< E}.
 
   (** Create a fresh evar with the given type. Returns the id of the new evar. *)
-  Definition fresh_evar (ty : term ∅) : hitree E evar_id :=
+  Definition fresh_evar (ty : term ∅) : meta E evar_id :=
     trigger (FreshEvar ty).
 
   (** Lookup the entry associated to an evar. Returns [None] if the evar doesn't exist. *)
-  Definition lookup_evar (ev : evar_id) : hitree E (option evar_entry) :=
+  Definition lookup_evar (ev : evar_id) : meta E (option evar_entry) :=
     trigger (LookupEvar ev).
 
   (** Get the type of an evar. Returns [None] if the evar doesn't exist. *)
-  Definition lookup_evar_type (ev : evar_id) : hitree E (option (term ∅)) :=
+  Definition lookup_evar_type (ev : evar_id) : meta E (option (term ∅)) :=
     let* entry_opt := lookup_evar ev in
     match entry_opt with
     | Some {| evar_type := ty ; evar_def := _ |} => ret $ Some ty
@@ -177,7 +180,7 @@ Section EvarOperations.
 
   (** Get the definition of an evar. Returns [None] if the evar doesn't exist
       of doesn't have a definition. *)
-  Definition get_evar_def (ev : evar_id) : hitree E (option (term ∅)) :=
+  Definition get_evar_def (ev : evar_id) : meta E (option (term ∅)) :=
     let* entry_opt := lookup_evar ev in
     match entry_opt with
     | Some {| evar_type := _ ; evar_def := Some def |} => ret $ Some def
@@ -186,7 +189,7 @@ Section EvarOperations.
 
   (** Set the definition of an evar. Fails if the evar is already defined,
       or if the definition doesn't have the correct type. *)
-  Definition define_evar (ev : evar_id) (def : term ∅) : hitree E unit :=
+  Definition define_evar (ev : evar_id) (def : term ∅) : meta E unit :=
     trigger (DefineEvar ev def).
 
 End EvarOperations.

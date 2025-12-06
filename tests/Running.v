@@ -1,5 +1,5 @@
 From Stdlib Require Strings.PrimString.
-From Metaprog Require Import Hitree RunHitree.
+From Metaprog Require Import MetaMonad RunMeta.
 
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.
@@ -26,7 +26,7 @@ Instance subeffect_iterE : iterE E -< E := { inj_effect := @E_iterE }.
 Instance subeffect_recE : recE E -< E := { inj_effect := @E_recE }.
 
 (** Run an hitree computation with effect [E]. *)
-Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (entry E)) (t : hitree E A) : A :=
+Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (fun_entry E)) (t : meta E A) : A :=
   match n with NoFuel => ocaml_handle_Fail _ "ocaml_run_hitree: out of fuel (should not happen)" | OneMoreFuel n =>
   match t with
   (* Return. *)
@@ -75,11 +75,11 @@ Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (entry E)) (t : hitree E A)
 (** * Testing. *)
 (*******************************************************************)
 
-Definition prg : hitree E unit :=
+Definition prg : meta E unit :=
   (for i = 1 to 5 do print "hello") >>
   print "done".
 
-Definition prg_rec : hitree E unit :=
+Definition prg_rec : meta E unit :=
   letrec loop i :=
     if Nat.ltb i 5 then print "hello" >> loop (i + 1)
     else ret tt
