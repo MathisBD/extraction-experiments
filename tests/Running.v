@@ -59,11 +59,12 @@ Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (fun_entry E)) (t : meta E 
   | Vis (E_recE e) =>
     match e with
     (* MkFix: add the function to the environment and run the body. *)
-    | MkFix F a =>
+    | @MkFix _ A B F a =>
       let x := Vec.length fs in
-      let ent := mk_entry E _ _ (F x) in
+      let ent := mk_entry E A B (F x) in
       ocaml_run_hitree n (Vec.add fs ent) (F x a)
-    (* Call: Lookup the function in the environment. *)
+    (* Call: Lookup the function in the environment.
+       This will crash if the function in the environment has the incorrect type. *)
     | Call x a =>
       let e := Vec.get fs x in
       ocaml_run_hitree n fs (ocaml_obj_magic (entry_fun e (ocaml_obj_magic a)))

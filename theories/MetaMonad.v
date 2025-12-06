@@ -122,23 +122,37 @@ Notation "'for' i '=' start 'to' stop 'do' body" := (for_ start stop (fun i => b
 (*******************************************************************)
 
 Variant recE (E : Type -> Type) : Type -> Type :=
-| MkFix {A B} (F : nat -> A -> meta E B) (a : A) : recE E B
-| Call {A B} (x : nat) (a : A) : recE E B.
+| MkFix {A B} (F : nat -> forall a : A, meta E (B a)) (a : A) : recE E (B a)
+| Call {A B} (x : nat) (a : A) : recE E (B a).
 
 Arguments MkFix {E A B}.
 Arguments Call {E A B}.
 
-Definition mkfix {E A B} `{recE E -< E} (F : nat -> A -> meta E B) (a : A) : meta E B :=
+Definition mkfix {E A B} `{recE E -< E} (F : nat -> forall a : A, meta E (B a)) (a : A) : meta E (B a) :=
   trigger (MkFix F a).
 
-Definition call {E A B} `{recE E -< E} (x : nat) (a : A) : meta E B :=
+Definition call {E A B} `{recE E -< E} (x : nat) (a : A) : meta E (B a) :=
   trigger (Call x a).
 
-Definition fix_ {E A B} `{recE E -< E} (F : (A -> meta E B) -> (A -> meta E B)) (a : A) : meta E B :=
-  mkfix (fun x a => F (call x) a) a.
+(** Take the fixpoint of a non-dependent function of one argument. *)
+Definition fix1 {E} {A B : Type} `{recE E -< E}
+  (F : (A -> meta E B) -> (A -> meta E B)) : A -> meta E B :=
+  @mkfix E A (fun _ => B) _ (fun x a => F (call x) a).
+
+(** Take the fixpoint of a dependent function of one argument. *)
+Definition fix1_dep {E} {A : Type} {B : A -> Type} `{recE E -< E}
+  (F : (forall a, meta E (B a)) -> (forall a, meta E (B a))) : forall a, meta E (B a) :=
+  @mkfix E A B _ (fun x a => F (call x) a).
+
+(** Take the fixpoint of an indexed function of one argument. *)
+Definition fix1_indexed {E} {I : Type} {A B : I -> Type} `{recE E -< E}
+  (F : (forall i, A i -> meta E (B i)) -> (forall i, A i -> meta E (B i))) : forall i (a : A i), meta E (B i) :=
+  fun i a =>
+    @mkfix E { i & A i } (fun '⟨i, _⟩ => B i) _
+      (fun x '⟨i, a⟩ => F (fun i a => @call E { i & A i } (fun '⟨i, _⟩ => B i) _ x ⟨i, a⟩) i a) ⟨i, a⟩.
 
 (** Notation to build a recursive function with one argument. *)
-Notation "'letrec' f x ':=' body 'in' cont" := (let f := fix_ (fun f x => body) in cont)
+Notation "'letrec' f x ':=' body 'in' cont" := (let f := fix1 (fun f x => body) in cont)
   (at level 200, no associativity, f binder, x binder, only parsing).
 
 (*******************************************************************)
@@ -180,7 +194,7 @@ Section EvarOperations.
 
   (** Get the definition of an evar. Returns [None] if the evar doesn't exist
       of doesn't have a definition. *)
-  Definition get_evar_def (ev : evar_id) : meta E (option (term ∅)) :=
+  Definition lookup_evar_def (ev : evar_id) : meta E (option (term ∅)) :=
     let* entry_opt := lookup_evar ev in
     match entry_opt with
     | Some {| evar_type := _ ; evar_def := Some def |} => ret $ Some def

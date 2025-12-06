@@ -123,8 +123,8 @@ Extract Inlined Constant ocaml_handle_Fail => "MyPlugin.Extraction.handle_Fail".
 (** Entry for a recursive function. *)
 Record fun_entry (E : Type -> Type) := mk_entry {
   entry_dom : Type ;
-  entry_codom : Type ;
-  entry_fun : entry_dom -> meta E entry_codom
+  entry_codom : entry_dom -> Type ;
+  entry_fun : forall a : entry_dom, meta E (entry_codom a)
 }.
 
 Arguments entry_dom {E}.
