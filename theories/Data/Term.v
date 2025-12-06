@@ -1,5 +1,10 @@
 From Metaprog Require Import Prelude.
 
+(** This module defines:
+    - The core data-type of (well-scoped) terms.
+    - Renamings, thinnings, and substitutions.
+    - Smart weakening. *)
+
 (***********************************************************************)
 (** * Scopes and de Bruijn indices. *)
 (***********************************************************************)
@@ -17,12 +22,12 @@ Inductive scope : Set :=
 Derive NoConfusion for scope.
 
 (** [∅] is the empty scope: it contains no variables. *)
-Global Notation "∅" := SNil.
+Notation "∅" := SNil.
 
 (** [s ▷ x] is the scope [s] extended with one variable [x].
     You can use index [I0] to refer to [x] and [IS] to refer
     to variables in [s]. *)
-Global Notation "s ▷ x" := (SCons s x) (at level 20, left associativity).
+Notation "s ▷ x" := (SCons s x) (at level 20, left associativity).
 
 (** [index s] is the type of de Bruijn indices in scope [s].
     You can think of an index as a natural number which
@@ -59,25 +64,34 @@ Qed.
 (** We represente evars using a unique identifier (a natural number). *)
 Definition evar_id := nat.
 
-(** Well-scoped terms, using de Bruijn indices. *)
-Inductive term : scope -> Type :=
+(** Well-scoped terms, using de Bruijn indices.
+    The scope is a _non-uniform_ parameter: this gives slightly better behaviour
+    in dependent pattern matching. *)
+Inductive term (s : scope) : Type :=
 (** [TType] is the type of types (i.e. [Type] in Rocq).
     For the moment we don't support universes or other sorts such as [Prop]. *)
-| TType {s} : term s
+| TType : term s
 (** [TVar i] is a local variable, encoded using a de Bruijn indcex [i]. *)
-| TVar {s} (i : index s) : term s
+| TVar (i : index s) : term s
 (** [TLam x ty body] represents the lambda abstraction [fun x : ty => body]. *)
-| TLam {s} (x : tag) (ty : term s) (body : term (s ▷ x)) : term s
+| TLam (x : tag) (ty : term s) (body : term (s ▷ x)) : term s
 (** [TProd x a b] represents the dependent product [forall x : a, b].
     If [b] does not depend on [x] the product is non-dependent: [a -> b]. *)
-| TProd {s} (x : tag) (a : term s) (b : term (s ▷ x)) : term s
+| TProd (x : tag) (a : term s) (b : term (s ▷ x)) : term s
 (** [TApp f args] represents the application of function [f] to the
     list of arguments [args]. Functions are expected to maintain the invariant
     that [args] is non-empty and that [f] is not itself of the form [TApp _ _]. *)
-| TApp {s} (f : term s) (args : list (term s)) : term s
+| TApp (f : term s) (args : list (term s)) : term s
 (** [TEvar e] represents an existential variable (evar) used for unification.
     Information pertaining to evars is stored in the evar-map. *)
-| TEvar {s} (e : evar_id) : term s.
+| TEvar (e : evar_id) : term s.
+
+Arguments TType {s}.
+Arguments TVar {s}.
+Arguments TLam {s}.
+Arguments TProd {s}.
+Arguments TApp {s}.
+Arguments TEvar {s}.
 
 Derive Signature NoConfusion NoConfusionHom for term.
 

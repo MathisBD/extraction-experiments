@@ -1,7 +1,11 @@
 From Stdlib Require Strings.PrimString.
 From Stdlib Require Import Relations Morphisms Setoid Program Bool Nat List Lia.
 From Equations Require Import Equations.
-From Metaprog Require Import Term MetaMonad Effects.Print Effects.Fail Effects.Rec Effects.Evar.
+From Metaprog Require Import
+  Prelude
+  Data.Term Data.Context
+  Meta.Monad
+  Effects.Print Effects.Fail Effects.Rec Effects.Evar.
 
 Import ListNotations.
 Import PrimString.PStringNotations.
@@ -10,9 +14,6 @@ Open Scope pstring_scope.
 (***********************************************************************)
 (** * Utility functions and notations. *)
 (***********************************************************************)
-
-(** Right-associative function application. *)
-Notation "f $ x" := (f x) (at level 67, right associativity, only parsing).
 
 Definition option_default {A} (a : A) (opt_a : option A) : A :=
   match opt_a with Some a => a | None => a end.
@@ -53,31 +54,6 @@ rev_acc acc (x :: xs) := rev_acc (x :: acc) xs.
 Definition rev {A} (xs : list A) : list A := rev_acc nil xs.
 
 (***********************************************************************)
-(** * Contexts. *)
-(***********************************************************************)
-
-Inductive context : scope -> scope -> Type :=
-| CNil {s} : context s s
-| CCons {s s'} (ctx : context s s') (x : tag) (ty : term s') : context s (s' ▷ x).
-
-(** Lookup the type of a variable in a full context. *)
-Equations lookup_context {s} : index s -> context ∅ s -> term s :=
-lookup_context I0 (CCons ctx x ty) := wk ty ;
-lookup_context (IS i) (CCons ctx x ty) := wk (lookup_context i ctx).
-
-Equations prod_context {s s'} : context s s' -> (list (index s') -> term s') -> term s :=
-prod_context CNil body := body nil ;
-prod_context (CCons ctx x ty) body :=
-  prod_context ctx $ fun is =>
-  TLam x ty (body (map IS is ++ [I0])).
-
-Equations lambda_context {s s'} : context s s' -> (list (index s') -> term s') -> term s :=
-lambda_context CNil body := body nil ;
-lambda_context (CCons ctx x ty) body :=
-  lambda_context ctx $ fun is =>
-  TLam x ty (body (map IS is ++ [I0])).
-
-(***********************************************************************)
 (** * Unification algorithm. *)
 (***********************************************************************)
 
@@ -93,46 +69,68 @@ Context {Hevar : evarE -< E}.
 (** [whd_evars evm t] will check if [t] is a defined evar, and if yes replace
     it with its body. *)
 Definition whd_evars {s} (t : term s) : meta E (term s) :=
-  letrec whd_evars s (t : term s) :=
+  letrec% whd_evars s (t : term s) :=
     match t with
     | TEvar ev =>
-        let* def_opt := lookup_evar_def ev in
+        let% def_opt := lookup_evar_def ev in
         match def_opt with
         | Some def => whd_evars s (wk def)
-        | None => ret $ TEvar ev
+        | None => ret (TEvar ev)
         end
     | _ => ret t
     end
   in
   whd_evars s t.
 
-(** Check if two terms are equal modulo evar-expansion. This does not check for
-    conversion modulo reduction rules (e.g. β-reduction). *)
-Equations eq_term_evars_step : (forall s, term s -> term s -> meta E bool) ->
-  (forall s, term s -> term s -> meta E bool) :=
-eq_term_evars_step eq_term_evars s t u with whd_evars
+(** [allM pred xs] checks if [pred] is true on all elements of [xs]. *)
+Fixpoint allM {E A} (pred : A -> meta E bool) (xs : list A) : meta E bool :=
+  match xs with
+  | [] => ret true
+  | x :: xs => pred x and% allM pred xs
+  end.
 
-Admitted.
-(*  letrec eq_term_evars '(t, u) :=
+(** [allM2 pred xs ys] checks if [pred] is true on all elements of [xs] and [ys].
+    Fails if [xs] and [ys] are not of the same length. *)
+Fixpoint allM2 {E A1 A2} `{failE -< E} (pred : A1 -> A2 -> meta E bool) (xs : list A1) (ys : list A2) : meta E bool :=
+  match xs, ys with
+  | [], [] => ret true
+  | x :: xs, y :: ys => pred x y and% allM2 pred xs ys
+  | _, _ => fail "allM2: lengths don't match"
+  end.
+
+(** [mapM2 f xs] maps function [f] over the lists [xs] and [ys] and collects the results.
+    Effects are sequenced from left to right.
+    Fails if [xs] and [ys] are not the same length. *)
+Fixpoint mapM2 {E A1 A2 B} `{failE -< E} (f : A1 -> A2 -> meta E B) (xs : list A1) (ys : list A2) : meta E (list B) :=
+  match xs, ys with
+  | [], [] => ret nil
+  | x :: xs, y :: ys =>
+    let% z := f x y in
+    let% zs := mapM2 f xs ys in
+    ret (z :: zs)
+  | _, _ => fail "mapM2: lengths don't match"
+  end.
+
+Definition eq_term_evars {s} (t u : term s) : meta E bool :=
+  letrec% loop s (t : term s) (u : term s) : meta E bool :=
+    let% t := whd_evars t in
+    let% u := whd_evars u in
     match t, u with
-    | TType, TTYpe => ret true
+    | TType, TType => ret true
+    | TVar x, TVar y => ret (index_eq x y)
+    | TLam x ty body, TLam x' ty' body' =>
+        loop _ ty ty' and% loop _ body (rename (replace_tag x) body')
+    | TProd x a b, TLam x' a' b' =>
+        loop _ a a' and% loop _ b (rename (replace_tag x) b')
+    | TApp f args, TApp f' args' =>
+      if Nat.eqb (List.length args) (List.length args')
+      then loop _ f f' and% allM2 (loop _) args args'
+      else ret false
+    | TEvar ev, TEvar ev' => ret (Nat.eqb ev ev')
     | _, _ => ret false
     end
   in
-  eq_term_evars (t, u).
-
-eq_term_evars evm t u with whd_evars evm t, whd_evars evm u := {
-  | TType, TType => true
-  | TVar x, TVar y => index_eq x y
-  | TLam x ty body, TLam y ty' body' =>
-      eq_term_evars evm ty ty' &&
-      eq_term_evars evm body (rename (replace_tag x) body')
-  | TProd x a b, TProd y a' b' =>
-      eq_term_evars evm a a' &&
-      eq_term_evars evm b (rename (replace_tag x) b')
-  | TEvar ev, TEvar ev' => Nat.eqb ev ev'
-  | _, _ => false
-}.*)
+  loop s t u.
 
 (***********************************************************************)
 (** * Retyping. *)
@@ -145,52 +143,44 @@ Admitted.
 Equations retype_spine {s} : context ∅ s -> term s -> list (term s) -> meta E (term s) :=
 retype_spine Γ f_ty [] := ret f_ty ;
 retype_spine Γ f_ty (arg :: args) :=
-  let* ⟨x, a, b⟩ := reduce_to_prod Γ f_ty in
+  let% ⟨x, a, b⟩ := reduce_to_prod Γ f_ty in
   retype_spine Γ (b[x := arg]) args.
-
-Equations retype_step (retype : {s & context ∅ s & term s } -> meta E (term s))
 
 (** [retype evm Γ t] computes the type of [t] in context [Γ] and evar-map [evm].
     Assumes [t] is already well-typed. *)
-Definition retype {s} (Γ : context ∅ s) (t : term s) : meta E (term s).
-Admitted.
-(*retype evm Γ (TVar x) := Some $ lookup_context x Γ ;
-retype evm Γ TType := Some TType ;
-retype evm Γ (TLam x ty body) :=
-    match retype evm (CCons Γ x ty) body with
-    | Some body_ty => Some $ TLam x ty body_ty
-    | None => None
-    end ;
-retype evm Γ (TProd x a b) := Some TType ;
-retype evm Γ (TEvar e) := option_map wk $ lookup_evar_type e evm ;
-retype evm Γ (TApp f args) :=
-    match retype evm Γ f with
-    | Some f_ty => retype_spine Γ f_ty args
-    | None => None
-    end.
-Next Obligation. simp term_size. lia. Qed.
-Next Obligation. simp term_size. lia. Qed.*)
+Definition retype {s} (Γ : context ∅ s) (t : term s) : meta E (term s) :=
+  letrec% retype s (Γ : context ∅ s) (t : term s) :=
+    match t with
+    | TVar x => ret (lookup_context x Γ)
+    | TType => ret TType
+    | TLam x ty body =>
+      let% body_ty := retype _ (CCons Γ x ty) body in
+      ret (TProd x ty body_ty)
+    | TProd x a b => ret TType
+    | TEvar ev =>
+      let% ev_type := lookup_evar_type ev in
+      match ev_type with
+      | Some ty => ret (wk ty)
+      | None => fail "retype: unbound evar"
+      end
+    | TApp f args =>
+      let% f_ty := retype _ Γ f in
+      retype_spine Γ f_ty args
+    end
+  in
+  retype s Γ t.
 
 (***********************************************************************)
 (** * Unification result. *)
 (***********************************************************************)
 
-Equations liftM {A} : option A -> meta E A :=
-liftM (Some a) := ret a ;
-liftM None := fail "liftM: got [None]".
-
-(* TODO: seems fishy, we should probably reset the evar-map before [t2] somehow? *)
-Definition orM (t1 t2 : meta E bool) : meta E bool :=
-  let* b1 := t1 in
+(* TODO: seems fishy, we should probably reset the evar-map before [t2] somehow?
+   This needs backtracking. *)
+Definition or_backtrack (t1 t2 : meta E bool) : meta E bool :=
+  let% b1 := t1 in
   if b1 then ret true else t2.
 
-Notation "t1 '<|>' t2" := (orM t1 t2) (at level 30, right associativity).
-
-Definition andM (t1 t2 : meta E bool) : meta E bool :=
-  let* b1 := t1 in
-  if b1 then t2 else ret false.
-
-Notation "t1 '<&>' t2" := (andM t1 t2) (at level 30, right associativity).
+Notation "t1 '<|>' t2" := (or_backtrack t1 t2) (at level 30, right associativity).
 
 (** [stack] represents a term by separating the head from the list of arguments (aka spine).
     This is done to have O(1) access to the head β-redex.
@@ -202,19 +192,23 @@ Definition stack (s : scope) : Type :=
   term s * list (term s).
 
 (** Normalize a stack. *)
-Definition norm_stack {s} (t : stack s) : meta E (stack s).
-Admitted.
-(*norm_stack evm (TApp f args, args') := norm_stack evm (f, args ++ args') ;
-norm_stack evm (TEvar e, args) with lookup_evar_body e evm := {
-  | Some body => norm_stack evm (wk body, args)
-  | _ => (TEvar e, args)
-} ;
-norm_stack evm t := t.
-Next Obligation. Admitted.
-Next Obligation. Admitted.*)
+Definition norm_stack {s} (t : stack s) : meta E (stack s) :=
+  letrec% norm_stack s (t : stack s) :=
+    match t with
+    | (TEvar ev, args) =>
+      let% ev_def := lookup_evar_def ev in
+      match ev_def with
+      | Some def => norm_stack s (wk def, args)
+      | None => ret (TEvar ev , args)
+      end
+    | (TApp f args, args') => norm_stack _ (f, args ++ args')
+    | _ => ret t
+    end
+  in
+  norm_stack s t.
 
 Definition is_var {s} (t : term s) : meta E bool :=
-  let* t := whd_evars t in
+  let% t := whd_evars t in
   match t with
   | TVar _ => ret true
   | _ => ret false
@@ -234,7 +228,7 @@ Section UnifyStep.
   (** Unify a list of terms. *)
   Equations unify_list {s} : context ∅ s -> list (term s) -> list (term s) -> meta E bool :=
   unify_list Γ [] [] := ret true ;
-  unify_list Γ (t :: ts) (u :: us) := unify Γ t u <&> unify_list Γ ts us ;
+  unify_list Γ (t :: ts) (u :: us) := unify Γ t u and% unify_list Γ ts us ;
   unify_list _ _ _ := fail "unify_list: lengths don't match".
 
   (** Structurally unify the heads of two terms. *)
@@ -245,18 +239,18 @@ Section UnifyStep.
   unify_same Γ (TVar x) (TVar y) := ret $ index_eq x y ;
   (* Rule LAM-SAME. *)
   unify_same Γ (TLam x ty body) (TLam y ty' body') :=
-    unify Γ ty ty' <&>
+    unify Γ ty ty' and%
     unify (CCons Γ x ty) body (rename (replace_tag x) body') ;
   (* Rule PROD-SAME. *)
   unify_same Γ (TProd x a b) (TProd y a' b') :=
-    unify Γ a a' <&>
+    unify Γ a a' and%
     unify (CCons Γ x a) b (rename (replace_tag x) b') ;
   unify_same Γ _ _ := ret false.
 
   (** Rule APP-FO. *)
   Equations unify_app_fo : forall {s}, context ∅ s -> stack s -> stack s -> meta E bool :=
   unify_app_fo Γ (f, args) (f', args') :=
-    if Nat.eqb (length args) (length args')
+    if Nat.eqb (List.length args) (List.length args')
     then unify_list Γ (f :: args) (f' :: args')
     else ret false.
 
@@ -276,25 +270,26 @@ Section UnifyStep.
 
   (* TODO: this should probably use reduction, and be a bit smarter to avoid using [ccons_left]
      which is very slow. *)
-  Equations decompose_prod {s} (t : term s) : { s' & context s s' & term s' } by wf (term_size t) lt :=
-  decompose_prod (TProd x ty body) :=
+  Definition decompose_prod {s} (t : term s) : { s' & context s s' & term s' }.
+  Admitted.
+  (*decompose_prod (TProd x ty body) :=
     let ⟨s', Γ', t'⟩ := decompose_prod body in
     ⟨s', ccons_left x ty Γ', t'⟩ ;
   decompose_prod t := ⟨s, CNil, t⟩.
-  Next Obligation. simp term_size. lia. Qed.
+  Next Obligation. simp term_size. lia. Qed.*)
 
   (** Technical detail: [prune_ctx] expects the list of booleans [pos] to be in reverse order
       (i.e. the left-most element in [pos] corresponds to the right-most element in [Γ]). *)
   Equations prune_ctx {s} : list bool -> context ∅ s -> meta E { s' & context ∅ s' & thinning s' s} :=
   prune_ctx (true :: bs) (CCons Γ x ty) :=
-    let* ⟨s', Γ', δ⟩ := prune_ctx bs Γ in
+    let% ⟨s', Γ', δ⟩ := prune_ctx bs Γ in
     (* Check if [ty] uses only variables in [s']. *)
     match thin_inv δ ty with
     | Some ty' => ret ⟨s' ▷ x, CCons Γ' x ty', ThinKeep δ⟩
     | None => ret ⟨s', Γ', ThinSkip δ⟩
     end ;
   prune_ctx (false :: bs) (CCons Γ x ty) :=
-    let* ⟨s', Γ', δ⟩ := prune_ctx bs Γ in
+    let% ⟨s', Γ', δ⟩ := prune_ctx bs Γ in
     ret ⟨s', Γ', ThinSkip δ⟩ ;
   prune_ctx nil CNil := ret ⟨∅, CNil, ThinNil⟩ ;
   prune_ctx _ _ := fail "prune_ctx: length of list and context don't match".
@@ -306,7 +301,7 @@ Section UnifyStep.
       the pruned context to the original context. *)
   Equations prune {s} : list bool -> context ∅ s -> term s -> meta E (option { s' & context ∅ s' & term s' & thinning s' s }) :=
   prune pos Γ ty :=
-    let* ⟨s', Γ', δ⟩ := prune_ctx (rev pos) Γ in
+    let% ⟨s', Γ', δ⟩ := prune_ctx (rev pos) Γ in
     match thin_inv δ ty with
     | Some ty' => ret $ Some ⟨s', Γ', ty', δ⟩
     | None => ret None
@@ -316,63 +311,72 @@ Section UnifyStep.
   Equations unify_meta_same {s} : context ∅ s -> stack s -> stack s -> meta E bool :=
   unify_meta_same Γ (TEvar ev, args) (TEvar ev', args') :=
     (* Check all the arguments are variables. *)
-    if Nat.eqb ev ev' && forallb (is_var evm) args && forallb (is_var evm) args' then
+    if% ret (Nat.eqb ev ev') and% allM is_var args and% allM is_var args' then
       (* Compute the list of positions where the arguments agree (resp. don't agree). *)
-      let pos := map2 (eq_term_evars evm) args args' in
+      let% pos := mapM2 eq_term_evars args args' in
       (* Decompose the type of [ev]. *)
-      let* ev_type := liftM $ lookup_evar_type ev evm in
-      let ⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
+      let% ev_type := lookup_evar_type ev in
+      let% ev_type :=
+        match ev_type with
+        | Some ty => ret ty
+        | None => fail "unify_meta_same: undefined evar"
+        end
+      in
+      let '⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
       (* Prune the context [Γev] to obtain a smaller context [Γev'] and evar type [Γev' |- Tev']
          and a thinning [thin : ren s2 s1]. *)
-      let* ⟨s2, Γev', Tev', thin⟩ := prune pos Γev Tev in
-      (* Create a new evar [new_ev : ∀ Γev', Tev']. *)
-      let (new_ev, evm) := fresh_evar evm (prod_context Γev' $ fun _ => Tev') in
-      (* Set [ev := λ (xs : Γev) => new_evar (filter_list pos xs)]. *)
-      let ev_body := lambda_context Γev $ fun is =>
-        TApp (TEvar ev) (filter_list pos $ map TVar is)
-      in
-      let evm := define_evar evm ev ev_body in
-      (* Finally return the updated evar-map. *)
-      Yes evm
+      let% x := prune pos Γev Tev in
+      match x with
+      | None => ret false
+      | Some ⟨s2, Γev', Tev', thin⟩ =>
+        (* Create a new evar [new_ev : ∀ Γev', Tev']. *)
+        let% new_ev := fresh_evar (prod_context Γev' $ fun _ => Tev') in
+        (* Set [ev := λ (xs : Γev) => new_evar (filter_list pos xs)]. *)
+        let ev_def := lambda_context Γev $ fun is =>
+          TApp (TEvar ev) (filter_list pos $ map TVar is)
+        in
+        define_evar ev ev_def >>
+        ret true
+      end
     else ret false ;
   unify_meta_same _ _ _ := ret false.
 
   (** Get the index of a variable. Returns [None] if the term is not a variable. *)
   Definition dest_var {s} (t : term s) : meta E (option (index s)) :=
-    let* t := whd_evars evm t in
+    let% t := whd_evars t in
     match t with
-    | TVar i => ret $ Some i
+    | TVar i => ret (Some i)
     | _ => ret None
     end.
 
   (** Assumes the variables [ys] are distinct. *)
-  Equations invert_index {s s'} : index s -> list (index s) -> list (index s') -> meta E (index s') :=
+  Equations invert_index {s s'} : index s -> list (index s) -> list (index s') -> meta E (option (index s')) :=
   invert_index y0 (y :: ys) (x :: xs) :=
     if index_eq y0 y then
       (* We don't need to check that [y0] is not in [ys] because the variables [ys] are
          assumed to be distinct. *)
-      ret x
+      ret (Some x)
     else
       invert_index y0 ys xs ;
-  invert_index y0 [] [] := No ;
-  invert_index _ _ _ := Error (* The lists should have the same length. *).
+  invert_index y0 [] [] := ret None ;
+  invert_index _ _ _ := fail "invert_index: lengths don't match".
 
   Equations invert_term {s s'} (t : term s) (ys : list (index s)) (xs : list (index s')) :
     meta E (term s') by wf (term_size t) lt :=
-  invert_term evm t ys xs with whd_evars evm t := {
+  invert_term evm t ys xs with whd_evars t := {
     | TType => ret TType
-    | TVar y => let* x := invert_index y ys xs in ret (TVar x)
+    | TVar y => let% x := invert_index y ys xs in ret (TVar x)
     | TLam x ty body =>
-        let* ty' := invert_term evm ty ys xs in
-        let* body' := invert_term evm body (map IS ys) xs in
+        let% ty' := invert_term evm ty ys xs in
+        let% body' := invert_term evm body (map IS ys) xs in
         ret $ TLam x ty' (wk body')
     | TProd x ty body =>
-        let* ty' := invert_term evm ty ys xs in
-        let* body' := invert_term evm body (map IS ys) xs in
+        let% ty' := invert_term evm ty ys xs in
+        let% body' := invert_term evm body (map IS ys) xs in
         ret $ TProd x ty' (wk body')
     | TApp f args =>
-        let* f' := invert_term evm f ys xs in
-        let* args' := mapM (fun arg => invert_term evm arg ys xs) args in
+        let% f' := invert_term evm f ys xs in
+        let% args' := mapM (fun arg => invert_term evm arg ys xs) args in
         ret $ TApp f' args'
     | TEvar ev => ret $ TEvar ev
   }.
@@ -408,43 +412,44 @@ Section UnifyStep.
     rev (context_indices_aux Γ).
 
   Equations unify_meta_inst_l {s} : context ∅ s -> stack s -> stack s -> meta E bool :=
-  unify_meta_inst_l Γ evm (TEvar ev, args) t :=
+  unify_meta_inst_l Γ (TEvar ev, args) t :=
     (* Check the arguments are _distinct_ variables. *)
     match is_distinct_vars args with
     | Some vars =>
       (* Decompose the type of [ev]. *)
-      let* ev_type := liftM $ lookup_evar_type ev evm in
-      let ⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
+      let% ev_type := liftM $ lookup_evar_type ev evm in
+      let '⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
       (* Invert the right-hand-side [t]. *)
-      let* t' : term s1 := invert_term evm (TApp (fst t) (snd t)) vars (context_indices Γev) in
+      let% t' : term s1 := invert_term evm (TApp (fst t) (snd t)) vars (context_indices Γev) in
       (* Perform the occurs-check. *)
-      let* () := if has_evar ev t' then No else Yes () in
+      if has_evar ev t' then ret false else
       (* Unify the type of [t'] and the type of [Tev]. *)
-      let* t_ty' := liftM $ retype evm Γev t' in
-      let* evm := unify Γev evm t_ty' Tev in
+      let% t_ty' := retype Γev t' in
+      unify Γev evm t_ty' Tev and%
       (* Define the evar. *)
       let ev_body := lambda_context Γev $ fun _ => t' in
-      let evm := define_evar evm ev ev_body in
-      (* Finally return the updated evar-map. *)
-      Yes evm
-    | None => No
+      define_evar ev ev_body >>
+      ret true
+    | None => ret false
     end ;
-  unify_meta_inst_l _ _ _ _ := No.
+  unify_meta_inst_l _ _ _ := ret false.
 
   (** Apply a single rule, and recurse using [unify_stack]. *)
   Definition unify_step {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
-    let t := norm_stack evm t in
-    let u := norm_stack evm u in
+    let% t := norm_stack t in
+    let% u := norm_stack u in
     (* First try to instantiate any evar. *)
-    unify_meta_same Γ evm t u <|> unify_meta_inst_l Γ evm t u <|>
+    unify_meta_same Γ t u <|> unify_meta_inst_l Γ t u <|>
     (* Then try structural unification. *)
-    unify_app_fo Γ evm t u <|>
+    unify_app_fo Γ t u <|>
     (* Finally try to use reduction rules. *)
-    unify_beta_l Γ evm t u <|> unify_beta_r Γ evm t u.
+    unify_beta_l Γ t u <|> unify_beta_r Γ t u.
 
 End UnifyStep.
 
 (** Main entry point of the unification algorithm. *)
-Equations unify_stack {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
-unify_stack Γ evm t u := unify_step (fun _ Γ evm t u => unify_stack Γ evm t u) Γ evm t u.
-Next Obligation. Admitted.
+Definition unify_stack {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
+  letrec% unify_stack s Γ t u :=
+    unify_step (fun s Γ evm t u => unify_stack s Γ evm t u) Γ evm t u
+  in
+  unify_stack s Γ t u.

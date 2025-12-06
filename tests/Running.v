@@ -1,5 +1,5 @@
 From Stdlib Require Strings.PrimString.
-From Metaprog Require Import MetaMonad RunMeta
+From Metaprog Require Import Meta.Monad Meta.Run
   Effects.Print Effects.Fail Effects.Iter Effects.Rec.
 
 Import PrimString.PStringNotations.
@@ -78,17 +78,17 @@ Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (fun_entry E)) (t : meta E 
 (*******************************************************************)
 
 Definition prg : meta E unit :=
-  (for i = 1 to 5 do print "hello") >>
+  (for% i = 1 to 10 do print "hello") >>
   print "done".
 
-Definition prg_rec : meta E unit :=
-  letrec loop i : meta E unit :=
+(*Definition prg_rec : meta E unit :=
+  letrec% loop i : meta E unit :=
     if Nat.ltb i 5 then print "hello" >> loop (i + 1)
     else ret tt
   in
-  loop 1.
+  loop 1.*)
 
 Definition test : unit :=
-  ocaml_run_hitree NoFuel (Vec.empty tt) prg_rec.
+  ocaml_run_hitree NoFuel (Vec.empty tt) prg.
 
-Test test.
+Time Test test.

@@ -1,6 +1,6 @@
-From Metaprog Require Import Prelude MetaMonad Term.
+From Metaprog Require Import Prelude Meta.Monad Data.Term.
 
-(** This file specifies how to extract and run interaction trees.
+(** This module specifies how to extract and run interaction trees.
     It makes heavy use of OCaml constants and functions defined
     in the plugin (file "plugin/extraction.ml"). *)
 

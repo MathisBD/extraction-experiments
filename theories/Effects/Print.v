@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude MetaMonad.
+From Metaprog Require Import Prelude Meta.Monad.
 
 (** The effect [printE] allows meta-programs to use logging facilities. *)
 Variant printE : Type -> Type :=

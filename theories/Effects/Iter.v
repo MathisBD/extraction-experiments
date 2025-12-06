@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude MetaMonad.
+From Metaprog Require Import Prelude Meta.Monad.
 
 (** [iter_step A R] represents the result of a single iteration step
     with an accumulator of type [A] and a result of type [R]. *)
@@ -29,13 +29,14 @@ Definition continue {E A R} `{iterE E -< E} (acc : A) : meta E (iter_step A R) :
 Definition break {E A R} `{iterE E -< E} (res : R) : meta E (iter_step A R) :=
   ret $ Break res.
 
-(** [for_ start stop body] is a for-loop: it is equivalent to
+(** [for_loop start stop body] is a for-loop: it is equivalent to
     [body start >> body (start + 1) >> .. >> body stop]. Note that both bounds are included. *)
-Definition for_ {E} `{iterE E -< E} (start stop : nat) (body : nat -> meta E unit) : meta E unit :=
+Definition for_loop {E} `{iterE E -< E} (start stop : nat) (body : nat -> meta E unit) : meta E unit :=
   iter start (fun i =>
     if Nat.leb i stop then body i >> continue (i + 1) else break tt).
 
 (** For-loop notation on naturals.
     The body is expected to use the functions [continue] and [break]. *)
-Notation "'for' i '=' start 'to' stop 'do' body" := (for_ start stop (fun i => body))
+Notation "'for%' i '=' start 'to' stop 'do' body" :=
+  (for_loop start stop (fun i => body))
   (at level 200, no associativity, i binder, only parsing).

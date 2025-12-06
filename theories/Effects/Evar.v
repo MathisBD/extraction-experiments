@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude Term MetaMonad.
+From Metaprog Require Import Prelude Data.Term Meta.Monad.
 
 (** [evar_entry] records the information pertaining to an evar: its type
     and optionally its definition. *)
@@ -27,7 +27,7 @@ Section EvarOperations.
 
   (** Get the type of an evar. Returns [None] if the evar doesn't exist. *)
   Definition lookup_evar_type (ev : evar_id) : meta E (option (term ∅)) :=
-    let* entry_opt := lookup_evar ev in
+    let% entry_opt := lookup_evar ev in
     match entry_opt with
     | Some {| evar_type := ty ; evar_def := _ |} => ret $ Some ty
     | None => ret None
@@ -36,7 +36,7 @@ Section EvarOperations.
   (** Get the definition of an evar. Returns [None] if the evar doesn't exist
       of doesn't have a definition. *)
   Definition lookup_evar_def (ev : evar_id) : meta E (option (term ∅)) :=
-    let* entry_opt := lookup_evar ev in
+    let% entry_opt := lookup_evar ev in
     match entry_opt with
     | Some {| evar_type := _ ; evar_def := Some def |} => ret $ Some def
     | _ => ret None

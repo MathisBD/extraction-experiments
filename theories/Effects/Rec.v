@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude MetaMonad.
+From Metaprog Require Import Prelude Meta.Monad.
 
 (** Due to technical details related to the positivity condition, recursive calls
     are represented using a [key], which is implemented as a natural.
@@ -77,27 +77,28 @@ Section RecOperations.
 End RecOperations.
 
 
-Notation "'letrec' f a ':=' body 'in' cont" :=
+Notation "'letrec%' f a ':=' body 'in' cont" :=
   (let f := fix1_dep (fun f a => body) in cont)
-  (at level 200, no associativity, f binder, a pattern, only parsing).
+  (at level 200, no associativity, f ident, a pattern, only parsing).
 
-Notation "'letrec' f a ':' T ':=' body 'in' cont" :=
+Notation "'letrec%' f a ':' T ':=' body 'in' cont" :=
   (let f := (fix1_dep (fun f a => body) : (forall a, T)) in cont)
-  (at level 200, no associativity, f binder, a pattern, only parsing).
+  (at level 200, no associativity, f ident, a pattern, only parsing).
 
-Notation "'letrec' f a1 a2 ':=' body 'in' cont" :=
+
+Notation "'letrec%' f a1 a2 ':=' body 'in' cont" :=
   (let f := fix2_dep (fun f a1 a2 => body) in cont)
-  (at level 200, no associativity, f binder, a1 pattern, a2 pattern, only parsing).
+  (at level 200, no associativity, f ident, a1 pattern, a2 pattern, only parsing).
 
-Notation "'letrec' f a1 a2 ':' T ':=' body 'in' cont" :=
+Notation "'letrec%' f a1 a2 ':' T ':=' body 'in' cont" :=
   (let f := (fix2_dep (fun f a1 a2 => body) : (forall a1 a2, T)) in cont)
-  (at level 200, no associativity, f binder, a1 pattern, a2 pattern, only parsing).
+  (at level 200, no associativity, f ident, a1 pattern, a2 pattern, only parsing).
 
 
-Notation "'letrec' f a1 a2 a3 ':=' body 'in' cont" :=
+Notation "'letrec%' f a1 a2 a3 ':=' body 'in' cont" :=
   (let f := fix3_dep (fun f a1 a2 a3 => body) in cont)
-  (at level 200, no associativity, f binder, a1 pattern, a2 pattern, a3 pattern, only parsing).
+  (at level 200, no associativity, f ident, a1 pattern, a2 pattern, a3 pattern, only parsing).
 
-Notation "'letrec' f a1 a2 a3 ':' T ':=' body 'in' cont" :=
+Notation "'letrec%' f a1 a2 a3 ':' T ':=' body 'in' cont" :=
   (let f := (fix3_dep (fun f a1 a2 a3 => body) : (forall a1 a2 a3, T)) in cont)
-  (at level 200, no associativity, f binder, a1 pattern, a2 pattern, a3 pattern, only parsing).
+  (at level 200, no associativity, f ident, a1 pattern, a2 pattern, a3 pattern, only parsing).
