@@ -1,5 +1,6 @@
 From Stdlib Require Strings.PrimString.
-From Metaprog Require Import MetaMonad RunMeta.
+From Metaprog Require Import MetaMonad RunMeta
+  Effects.Print Effects.Fail Effects.Iter Effects.Rec.
 
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.
@@ -60,12 +61,12 @@ Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (fun_entry E)) (t : meta E 
     match e with
     (* MkFix: add the function to the environment and run the body. *)
     | @MkFix _ A B F a =>
-      let x := Vec.length fs in
-      let ent := mk_entry E A B (F x) in
-      ocaml_run_hitree n (Vec.add fs ent) (F x a)
+      let k := Key A B (Vec.length fs) in
+      let ent := mk_entry E A B (F k) in
+      ocaml_run_hitree n (Vec.add fs ent) (F k a)
     (* Call: Lookup the function in the environment.
        This will crash if the function in the environment has the incorrect type. *)
-    | Call x a =>
+    | Call (Key _ _ x) a =>
       let e := Vec.get fs x in
       ocaml_run_hitree n fs (ocaml_obj_magic (entry_fun e (ocaml_obj_magic a)))
     end
@@ -81,7 +82,7 @@ Definition prg : meta E unit :=
   print "done".
 
 Definition prg_rec : meta E unit :=
-  letrec loop i :=
+  letrec loop i : meta E unit :=
     if Nat.ltb i 5 then print "hello" >> loop (i + 1)
     else ret tt
   in

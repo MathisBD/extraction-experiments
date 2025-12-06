@@ -1,7 +1,7 @@
 From Stdlib Require Strings.PrimString.
 From Stdlib Require Import Relations Morphisms Setoid Program Bool Nat List Lia.
 From Equations Require Import Equations.
-From Metaprog Require Import Term MetaMonad.
+From Metaprog Require Import Term MetaMonad Effects.Print Effects.Fail Effects.Rec Effects.Evar.
 
 Import ListNotations.
 Import PrimString.PStringNotations.
@@ -93,22 +93,25 @@ Context {Hevar : evarE -< E}.
 (** [whd_evars evm t] will check if [t] is a defined evar, and if yes replace
     it with its body. *)
 Definition whd_evars {s} (t : term s) : meta E (term s) :=
-  letrec whd_evars t :=
+  letrec whd_evars s (t : term s) :=
     match t with
     | TEvar ev =>
         let* def_opt := lookup_evar_def ev in
         match def_opt with
-        | Some def => whd_evars (wk def)
+        | Some def => whd_evars s (wk def)
         | None => ret $ TEvar ev
         end
     | _ => ret t
     end
   in
-  whd_evars t.
+  whd_evars s t.
 
 (** Check if two terms are equal modulo evar-expansion. This does not check for
     conversion modulo reduction rules (e.g. β-reduction). *)
-Definition eq_term_evars {s} (t u : term s) : meta E bool.
+Equations eq_term_evars_step : (forall s, term s -> term s -> meta E bool) ->
+  (forall s, term s -> term s -> meta E bool) :=
+eq_term_evars_step eq_term_evars s t u with whd_evars
+
 Admitted.
 (*  letrec eq_term_evars '(t, u) :=
     match t, u with
@@ -142,7 +145,7 @@ Admitted.
 Equations retype_spine {s} : context ∅ s -> term s -> list (term s) -> meta E (term s) :=
 retype_spine Γ f_ty [] := ret f_ty ;
 retype_spine Γ f_ty (arg :: args) :=
-  let* '⟨x, a, b⟩ := reduce_to_prod Γ f_ty in
+  let* ⟨x, a, b⟩ := reduce_to_prod Γ f_ty in
   retype_spine Γ (b[x := arg]) args.
 
 Equations retype_step (retype : {s & context ∅ s & term s } -> meta E (term s))
@@ -275,7 +278,7 @@ Section UnifyStep.
      which is very slow. *)
   Equations decompose_prod {s} (t : term s) : { s' & context s s' & term s' } by wf (term_size t) lt :=
   decompose_prod (TProd x ty body) :=
-    let '⟨s', Γ', t'⟩ := decompose_prod body in
+    let ⟨s', Γ', t'⟩ := decompose_prod body in
     ⟨s', ccons_left x ty Γ', t'⟩ ;
   decompose_prod t := ⟨s, CNil, t⟩.
   Next Obligation. simp term_size. lia. Qed.
@@ -284,14 +287,14 @@ Section UnifyStep.
       (i.e. the left-most element in [pos] corresponds to the right-most element in [Γ]). *)
   Equations prune_ctx {s} : list bool -> context ∅ s -> meta E { s' & context ∅ s' & thinning s' s} :=
   prune_ctx (true :: bs) (CCons Γ x ty) :=
-    let* '⟨s', Γ', δ⟩ := prune_ctx bs Γ in
+    let* ⟨s', Γ', δ⟩ := prune_ctx bs Γ in
     (* Check if [ty] uses only variables in [s']. *)
     match thin_inv δ ty with
     | Some ty' => ret ⟨s' ▷ x, CCons Γ' x ty', ThinKeep δ⟩
     | None => ret ⟨s', Γ', ThinSkip δ⟩
     end ;
   prune_ctx (false :: bs) (CCons Γ x ty) :=
-    let* '⟨s', Γ', δ⟩ := prune_ctx bs Γ in
+    let* ⟨s', Γ', δ⟩ := prune_ctx bs Γ in
     ret ⟨s', Γ', ThinSkip δ⟩ ;
   prune_ctx nil CNil := ret ⟨∅, CNil, ThinNil⟩ ;
   prune_ctx _ _ := fail "prune_ctx: length of list and context don't match".
@@ -303,7 +306,7 @@ Section UnifyStep.
       the pruned context to the original context. *)
   Equations prune {s} : list bool -> context ∅ s -> term s -> meta E (option { s' & context ∅ s' & term s' & thinning s' s }) :=
   prune pos Γ ty :=
-    let* '⟨s', Γ', δ⟩ := prune_ctx (rev pos) Γ in
+    let* ⟨s', Γ', δ⟩ := prune_ctx (rev pos) Γ in
     match thin_inv δ ty with
     | Some ty' => ret $ Some ⟨s', Γ', ty', δ⟩
     | None => ret None
@@ -318,10 +321,10 @@ Section UnifyStep.
       let pos := map2 (eq_term_evars evm) args args' in
       (* Decompose the type of [ev]. *)
       let* ev_type := liftM $ lookup_evar_type ev evm in
-      let '⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
+      let ⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
       (* Prune the context [Γev] to obtain a smaller context [Γev'] and evar type [Γev' |- Tev']
          and a thinning [thin : ren s2 s1]. *)
-      let* '⟨s2, Γev', Tev', thin⟩ := prune pos Γev Tev in
+      let* ⟨s2, Γev', Tev', thin⟩ := prune pos Γev Tev in
       (* Create a new evar [new_ev : ∀ Γev', Tev']. *)
       let (new_ev, evm) := fresh_evar evm (prod_context Γev' $ fun _ => Tev') in
       (* Set [ev := λ (xs : Γev) => new_evar (filter_list pos xs)]. *)
@@ -411,7 +414,7 @@ Section UnifyStep.
     | Some vars =>
       (* Decompose the type of [ev]. *)
       let* ev_type := liftM $ lookup_evar_type ev evm in
-      let '⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
+      let ⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
       (* Invert the right-hand-side [t]. *)
       let* t' : term s1 := invert_term evm (TApp (fst t) (snd t)) vars (context_indices Γev) in
       (* Perform the occurs-check. *)
