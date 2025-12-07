@@ -1,10 +1,8 @@
-From Metaprog Require Import Prelude Meta.Monad Data.Term.
+From Metaprog Require Import Prelude.
 
-(** This module specifies how to extract and run interaction trees.
+(** This module specifies how to extract basic data-types to OCaml.
     It makes heavy use of OCaml constants and functions defined
     in the plugin (file "plugin/extraction.ml"). *)
-
-Declare ML Module "extraction-experiments.plugin".
 
 (*******************************************************************)
 (** * Extraction for built-in datatypes. *)
@@ -72,61 +70,3 @@ Module Vec.
   Extract Inlined Constant length => "MyPlugin.Extraction.Vec.length".
 
 End Vec.
-
-(*******************************************************************)
-(** * Extraction for terms. *)
-(*******************************************************************)
-
-(** We extract scopes to [int]. In the future we should
-    mark [scope] as [Ghost] to have it erased entirely by extraction. *)
-Extract Inductive scope => "int" [ "0" "Stdlib.Int.succ" ]
-  "MyPlugin.Extraction.nat_elim".
-
-Extract Inductive index => "MyPlugin.Extraction.index"
-  [ "MyPlugin.Extraction.I0" "MyPlugin.Extraction.I0" ].
-
-Extract Inductive term => "MyPlugin.Extraction.term"
-  [ "MyPlugin.Extraction.TType"
-    "MyPlugin.Extraction.TVar"
-    "MyPlugin.Extraction.TLam"
-    "MyPlugin.Extraction.TProd"
-    "MyPlugin.Extraction.TApp"
-    "MyPlugin.Extraction.TEvar" ].
-
-(*******************************************************************)
-(** * Extracting the monad. *)
-(*******************************************************************)
-
-(** Never ending fuel. *)
-Inductive fuel :=
-| NoFuel
-| OneMoreFuel (f : fuel).
-
-(** We extract [fuel] to [unit]: there is only one fuel [n]
-    and it is always of the form [n = OneMoreFuel n].
-    This way we can write functions using fuel in Rocq and they never run
-    out of fuel in OCaml! *)
-Extract Inductive fuel => "unit" [ "()" "(fun _ -> ())" ] "(fun f0 f1 _ -> f1 ())".
-
-(** Ocaml's [Obj.magic]. *)
-Parameter ocaml_obj_magic : forall {A B}, A -> B.
-Extract Inlined Constant ocaml_obj_magic => "Obj.magic".
-
-(** The effect handler for [Print] in OCaml. *)
-Parameter ocaml_handle_Print : string -> unit.
-Extract Inlined Constant ocaml_handle_Print => "MyPlugin.Extraction.handle_Print".
-
-(** The effect handler for [Fail] in OCaml. *)
-Parameter ocaml_handle_Fail : forall A, string -> A.
-Extract Inlined Constant ocaml_handle_Fail => "MyPlugin.Extraction.handle_Fail".
-
-(** Entry for a recursive function. *)
-Record fun_entry (E : Type -> Type) := mk_entry {
-  entry_dom : Type ;
-  entry_codom : entry_dom -> Type ;
-  entry_fun : forall a : entry_dom, meta E (entry_codom a)
-}.
-
-Arguments entry_dom {E}.
-Arguments entry_codom {E}.
-Arguments entry_fun {E}.

@@ -361,31 +361,44 @@ Section UnifyStep.
   invert_index y0 [] [] := ret None ;
   invert_index _ _ _ := fail "invert_index: lengths don't match".
 
-  Equations invert_term {s s'} (t : term s) (ys : list (index s)) (xs : list (index s')) :
-    meta E (term s') by wf (term_size t) lt :=
-  invert_term evm t ys xs with whd_evars t := {
-    | TType => ret TType
-    | TVar y => let% x := invert_index y ys xs in ret (TVar x)
-    | TLam x ty body =>
-        let% ty' := invert_term evm ty ys xs in
-        let% body' := invert_term evm body (map IS ys) xs in
-        ret $ TLam x ty' (wk body')
-    | TProd x ty body =>
-        let% ty' := invert_term evm ty ys xs in
-        let% body' := invert_term evm body (map IS ys) xs in
-        ret $ TProd x ty' (wk body')
-    | TApp f args =>
-        let% f' := invert_term evm f ys xs in
-        let% args' := mapM (fun arg => invert_term evm arg ys xs) args in
-        ret $ TApp f' args'
-    | TEvar ev => ret $ TEvar ev
-  }.
-  Next Obligation. Admitted.
-  Next Obligation. Admitted.
-  Next Obligation. Admitted.
-  Next Obligation. Admitted.
-  Next Obligation. Admitted.
-  Next Obligation. Admitted.
+  Axiom todo : forall {A}, A.
+
+  Definition invert_term {s s'} (t : term s) (ys : list (index s)) (xs : list (index s')) : meta E (option (term s')) :=
+    letrec% invert_term s (t : term s) (ys : list (index s)) : meta E (option (term s')) :=
+      let% t := whd_evars t in
+      match t with
+      | TType => ret $ Some TType
+      | TVar y =>
+          let% x_opt := invert_index y ys xs in
+          match x_opt with
+          | Some x => ret $ Some (TVar x)
+          | None => ret None
+          end
+      | TLam x ty body =>
+          let% ty' := invert_term _ ty ys in
+          let% body' := invert_term _ body (map IS ys) in
+          match ty', body' with
+          | Some ty', Some body' => ret $ Some $ TLam x ty' (wk body')
+          | _, _ => ret None
+          end
+      | TProd x ty body =>
+          let% ty' := invert_term _ ty ys in
+          let% body' := invert_term _ body (map IS ys) in
+               match ty', body' with
+          | Some ty', Some body' => ret $ Some $ TProd x ty' (wk body')
+          | _, _ => ret None
+          end
+      | TApp f args =>
+          let% f' := invert_term _ f ys in
+          let% args' := mapM (fun arg => invert_term _ arg ys) args in
+          match f', option_sequence args' with
+          | Some f', Some args' => ret $ Some $ TApp f' args'
+          | _, _ => ret None
+          end
+      | TEvar ev => ret $ Some $ TEvar ev
+      end
+    in
+    invert_term s t ys.
 
   (** [has_evar ev t] returns [true] if [ev] occurs in the term [t]. *)
   Equations has_evar {s} : evar_id -> term s -> bool :=
@@ -417,19 +430,29 @@ Section UnifyStep.
     match is_distinct_vars args with
     | Some vars =>
       (* Decompose the type of [ev]. *)
-      let% ev_type := liftM $ lookup_evar_type ev evm in
+      let% ev_type := lookup_evar_type ev in
+      let% ev_type :=
+        match ev_type with
+        | Some ty => ret ty
+        | None => fail "unify_meta_inst_l: undefined evar"
+        end
+      in
       let '⟨s1, Γev, Tev⟩ := decompose_prod ev_type in
       (* Invert the right-hand-side [t]. *)
-      let% t' : term s1 := invert_term evm (TApp (fst t) (snd t)) vars (context_indices Γev) in
-      (* Perform the occurs-check. *)
-      if has_evar ev t' then ret false else
-      (* Unify the type of [t'] and the type of [Tev]. *)
-      let% t_ty' := retype Γev t' in
-      unify Γev evm t_ty' Tev and%
-      (* Define the evar. *)
-      let ev_body := lambda_context Γev $ fun _ => t' in
-      define_evar ev ev_body >>
-      ret true
+      let% t' : option (term s1) := invert_term (TApp (fst t) (snd t)) vars (context_indices Γev) in
+      match t' with
+      | None => ret false
+      | Some t' =>
+        (* Perform the occurs-check. *)
+        if has_evar ev t' then ret false else
+        (* Unify the type of [t'] and the type of [Tev]. *)
+        let% t_ty' := retype Γev t' in
+        unify Γev t_ty' Tev and%
+        (* Define the evar. *)
+        let ev_body := lambda_context Γev $ fun _ => t' in
+        define_evar ev ev_body >>
+        ret true
+      end
     | None => ret false
     end ;
   unify_meta_inst_l _ _ _ := ret false.
@@ -449,7 +472,6 @@ End UnifyStep.
 
 (** Main entry point of the unification algorithm. *)
 Definition unify_stack {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
-  letrec% unify_stack s Γ t u :=
-    unify_step (fun s Γ evm t u => unify_stack s Γ evm t u) Γ evm t u
-  in
-  unify_stack s Γ t u.
+  fix4 unify_step s Γ t u.
+
+End UnifAlgorithm.

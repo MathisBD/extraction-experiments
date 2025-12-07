@@ -1,6 +1,6 @@
 From Stdlib Require Strings.PrimString.
-From Metaprog Require Import Meta.Monad Meta.Run
-  Effects.Print Effects.Fail Effects.Iter Effects.Rec.
+From Metaprog.Control Require Import Meta Effects.Print Effects.Fail Effects.Iter Effects.Rec.
+From Metaprog.Extraction Require Import All.
 
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.

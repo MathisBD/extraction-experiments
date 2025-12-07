@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude Meta.Monad.
+From Metaprog Require Import Prelude Control.Meta.
 
 (** The effect [failE] allows meta-programs to throw fatal errors. *)
 Variant failE : Type -> Type :=
