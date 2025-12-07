@@ -1,7 +1,7 @@
 From Metaprog Require Import Prelude.
 
 (** This module defines:
-    - The core data-type of (well-scoped) terms.
+    - The core data-type of (well-scoped) terms using phantom tags.
     - Renamings, thinnings, and substitutions.
     - Smart weakening. *)
 
@@ -9,12 +9,21 @@ From Metaprog Require Import Prelude.
 (** * Scopes and de Bruijn indices. *)
 (***********************************************************************)
 
-(** We put tags in [Prop] so that they are erased by extraction.
-    In the future we should put [tag] and [scope] in [Ghost]
-    so that both get erased by extraction. *)
+(** [tag] represents phantom tags which are completely proof irrelevant and
+    computationally irrelevant but are used to guide type-class resolution.
+    Phantom tags enable one to build smart weakening operations
+    (e.g. [wk] below).
+
+    We put phantom tags in [Prop] so that they are erased by extraction. *)
 Inductive tag : Prop :=
 | TAG.
 
+(** [scope] is isomorphic to the set of natural numbers [nat], but additionally
+    contains phantom tags.
+
+    For the moment [scope] is extracted to OCaml's [int]: in the future extraction
+    should erase [scope] entirely. We can't put scopes in [Prop] because
+    they need to be proof-relevant, so we need to wait for [Ghost] to be implemented. *)
 Inductive scope : Set :=
 | SNil
 | SCons (s : scope) (x : tag).
