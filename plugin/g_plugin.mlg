@@ -2,8 +2,19 @@ DECLARE PLUGIN "extraction-experiments.plugin"
 
 {
   open Stdarg
+  open Procq.Prim
+  open Procq.Constr
 }
 
 VERNAC COMMAND EXTEND Test CLASSIFIED AS SIDEFF
 | ![opaque_access] [ "Test" ref(t) ] -> { Main.main t }
+END
+
+VERNAC ARGUMENT EXTEND meta_fixpoint_decl
+| [ ident_decl(id) binders(binders) type_cstr(rtype) ":=" lconstr(body) ] ->
+  { MetaFixpoint.{ name = fst id ; univs = snd id ; binders ; rtype ; body } }
+END
+
+VERNAC COMMAND EXTEND MetaFixpoint CLASSIFIED AS SIDEFF
+| [ "MetaFixpoint" meta_fixpoint_decl(decl) ] -> { MetaFixpoint.define_meta_fixpoint(decl) }
 END
