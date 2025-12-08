@@ -49,7 +49,7 @@ Notation "t >>= f" := (Bind t f)
 
 (** Let-style notation for [Bind]. *)
 Notation "'let%' x ':=' t 'in' f" := (Bind t (fun x => f))
-  (no associativity, at level 200, x pattern).
+  (right associativity, at level 200, x pattern).
 
 (** [seq t u] or [t >> u] executes [t], discards its result, then executes [u]. *)
 Definition seq {E A B} (t : meta E A) (u : meta E B) : meta E B :=

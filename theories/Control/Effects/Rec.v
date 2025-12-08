@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude Control.Meta.
+From Metaprog Require Import Prelude PluginLoader Control.Meta.
 
 (** Due to technical details related to the positivity condition, recursive calls
     are represented using a [key], which is implemented as a natural.
@@ -74,9 +74,18 @@ Section RecOperations.
 
 End RecOperations.
 
+(** Support for the [MetaFixpoint] command. *)
+
+Register fix1 as metaprog.control.effects.rec.fix1.
+Register fix2 as metaprog.control.effects.rec.fix2.
+Register fix3 as metaprog.control.effects.rec.fix3.
+Register fix4 as metaprog.control.effects.rec.fix4.
+Register fix5 as metaprog.control.effects.rec.fix5.
+
+
 (** 1-argument letrec notation. *)
 
-Notation "'letrec%' f a ':=' body 'in' cont" :=
+(*Notation "'letrec%' f a ':=' body 'in' cont" :=
   (let f := fix1 (fun f a => body) in cont)
   (at level 200, no associativity, f ident, a pattern, only parsing).
 
@@ -122,4 +131,4 @@ Notation "'letrec%' f a1 a2 a3 a4 a5 ':=' body 'in' cont" :=
 
 Notation "'letrec%' f a1 a2 a3 a4 a5 ':' T ':=' body 'in' cont" :=
   (let f := (fix5 (fun f a1 a2 a3 a4 a5 => body) : (forall a1 a2 a3 a4 a5, T)) in cont)
-  (at level 200, no associativity, f ident, a1 pattern, a2 pattern, a3 pattern, a4 pattern, a5 pattern, only parsing).
+  (at level 200, no associativity, f ident, a1 pattern, a2 pattern, a3 pattern, a4 pattern, a5 pattern, only parsing).*)

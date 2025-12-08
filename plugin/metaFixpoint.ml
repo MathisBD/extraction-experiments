@@ -8,25 +8,17 @@ type vernac_meta_fixpoint = {
   body : Constrexpr.constr_expr
 }
 
-(** Resolve a reference [ref] registered in a Rocq file with [Register _ as ref]. *)
-let resolve (ref : string) : Names.GlobRef.t Lazy.t = lazy (Rocqlib.lib_ref ref)
-
-let rocq_fix1 = resolve "metaprog.control.effects.rec.fix1"
-let rocq_fix2 = resolve "metaprog.control.effects.rec.fix2"
-let rocq_fix3 = resolve "metaprog.control.effects.rec.fix3"
-let rocq_fix4 = resolve "metaprog.control.effects.rec.fix4"
-let rocq_fix5 = resolve "metaprog.control.effects.rec.fix5"
-
 (** Create a fresh [Type] instance. *)
 let fresh_type env sigma : Evd.evar_map * EConstr.t =
   let sigma, level = Evd.new_univ_level_variable Evd.univ_flexible sigma in
   (sigma, EConstr.mkType @@ Univ.Universe.make level)
 
-(** Create a fresh evar. *)
+(** Create a fresh evar. The evar can be solved using typeclass resolution,
+    but its type cannot. We might change this in the future. *)
 let fresh_evar env sigma : Evd.evar_map * EConstr.t =
   let sigma, t = fresh_type env sigma in
   let sigma, ty = Evarutil.new_evar env sigma t in
-  Evarutil.new_evar env sigma ty
+  Evarutil.new_evar ~typeclass_candidate:true env sigma ty
 
 (** Create [n] fresh evars. *)
 let rec fresh_evars env sigma n : Evd.evar_map * EConstr.t list =
@@ -42,19 +34,29 @@ let warn_non_recursive =
   CWarnings.create ~name:"non-recursive-meta" ~category:CWarnings.CoreCategories.fixpoints
     (fun () -> strbrk "Not a truly recursive MetaFixpoint.")
 
-(** Pick the correct fixpoint combinator depending on the number of arguments. *)
-let pick_fix_combinator (fname : Names.Id.t) (n_args : int) : Names.GlobRef.t =
-  if n_args = 0 then
+(** Pick the correct fixpoint combinator depending on the number of parameters. *)
+let pick_fix_combinator (fname : Names.Id.t) (n_params : int) : Names.GlobRef.t =
+  if n_params = 0 then
     Log.error "Meta fixpoint '%s' must take at least one parameter." (Names.Id.to_string fname)
-  else if n_args = 1 then Lazy.force rocq_fix1
-  else if n_args = 2 then Lazy.force rocq_fix2
-  else if n_args = 3 then Lazy.force rocq_fix3
-  else if n_args = 4 then Lazy.force rocq_fix4
-  else if n_args = 5 then Lazy.force rocq_fix5
-  else Log.error "Meta fixpoint '%s' takes too many arguments (%d)" (Names.Id.to_string fname) n_args
+  else if n_params = 1 then Rocqlib.lib_ref "metaprog.control.effects.rec.fix1"
+  else if n_params = 2 then Rocqlib.lib_ref "metaprog.control.effects.rec.fix2"
+  else if n_params = 3 then Rocqlib.lib_ref "metaprog.control.effects.rec.fix3"
+  else if n_params = 4 then Rocqlib.lib_ref "metaprog.control.effects.rec.fix4"
+  else if n_params = 5 then Rocqlib.lib_ref "metaprog.control.effects.rec.fix5"
+  else Log.error "Meta fixpoint '%s' takes too many arguments (%d)" (Names.Id.to_string fname) n_params
 
-(** Build the function corresponding to a meta fixpoint. *)
-let interp_mutual_fixpoint env (decl : vernac_meta_fixpoint) : Evd.evar_map * EConstr.t =
+(** Count the number of parameters in a list of bindings. *)
+let rec count_parameters (binders : Constrexpr.local_binder_expr list) : int =
+  match binders with
+  | [] -> 0
+  | CLocalAssum (l, _, _, _) :: binders -> List.length l + count_parameters binders
+  | CLocalDef _ :: binders -> 1 + count_parameters binders
+  | CLocalPattern _ :: binders -> 1 + count_parameters binders
+
+(** Build and define the function corresponding to a meta fixpoint. *)
+let define_meta_fixpoint  (decl : vernac_meta_fixpoint) : unit =
+  let env = Global.env () in
+
   (* Interpret the type of the fixpoint parameter, allowing for unresolved evars. *)
   let sigma, univs = Constrintern.interp_univ_decl_opt env decl.univs in
   let sigma, (impls, ((env_args, args_ctx), ctx_implicits, _)) = Constrintern.interp_context_evars env sigma decl.binders in
@@ -76,50 +78,30 @@ let interp_mutual_fixpoint env (decl : vernac_meta_fixpoint) : Evd.evar_map * EC
   let functional = EConstr.mkNamedLambda sigma annot fix_type @@ EConstr.it_mkLambda_or_LetIn body args_ctx in
 
   (* Apply the fixpoint combinator the functional. *)
-  let n_args = List.length decl.binders in
-  let rocq_fix = pick_fix_combinator decl.name.v n_args in
-  (* We need 1 evar for [E : Type -> Type], 1 evar for [recE E -< e],
+  let n_params = count_parameters decl.binders in
+  let rocq_fix = pick_fix_combinator decl.name.v n_params in
+  (* We need 1 evar for [E : Type -> Type], 1 evar for [recE E -< E],
      1 evar for the type of each argument, and 1 evar for the return type. *)
-  let sigma, ev = fresh_evar env sigma in
-  let sigma, ev_inst = fresh_evar env sigma in
-  let sigma, evars = fresh_evars env sigma (n_args + 1) in
+  let sigma, evars = fresh_evars env sigma (n_params + 3) in
   let sigma, combinator = EConstr.fresh_global env sigma rocq_fix in
-  let func = EConstr.mkApp (combinator, Array.of_list (ev :: ev_inst :: evars @ [ functional ])) in
+  let func = EConstr.mkApp (combinator, Array.of_list (evars @ [ functional ])) in
 
-  (* Type-check the resulting term. *)
+  (* Type-check the resulting term, using typeclass resolution. *)
   let sigma = Typing.check env sigma func fix_type in
-  Log.printf "func after typecheck: %s" (Log.show_econstr env sigma func);
-
-  (* Instantiate the instance evar. *)
-  let sigma, inst = EConstr.fresh_global env sigma (Lazy.force @@ resolve "metaprog.e_sub") in
-  let sigma = Evd.define (fst @@ EConstr.destEvar sigma ev_inst) inst sigma in
-  let sigma = Typing.check env sigma func fix_type in
-  Log.printf "func after instantiation: %s" (Log.show_econstr env sigma func);
-
-  (* Instantiate evars and check all are resolved. *)
-  (*let sigma = Typeclasses.resolve_typeclasses env sigma in*)
-  let sigma = Evarconv.solve_unif_constraints_with_heuristics env sigma in
-  let sigma = Evd.minimize_universes sigma in
-  let sigma = Pretyping.(solve_remaining_evars all_no_fail_flags env sigma) in
+  let sigma = Typeclasses.resolve_typeclasses env sigma in
+  (*Log.printf "func after typecheck: %s" (Log.show_econstr env sigma func);*)
   Pretyping.check_evars_are_solved ~program_mode:false env sigma;
 
-  (* Finally check the fixpoint is truly recursive, i.e. check the body contains the fixpoint parameter. *)
+  (* Check the fixpoint is truly recursive, i.e. check the body contains the fixpoint parameter. *)
   let is_recursive = Termops.occur_var env_body sigma decl.name.v body in
   if not is_recursive then warn_non_recursive ();
 
-  sigma, func
-
-let define_meta_fixpoint (decl : vernac_meta_fixpoint) : unit =
-  let env = Global.env () in
-  (*match Typeclasses.instances (Lazy.force @@ resolve "metaprog.meta.subeffect") with
-  | None -> Log.printf "no instance found"
-  | Some insts ->
-    Log.printf "found %d intance(s)" (List.length insts);
-    List.iter (fun inst ->
-      Log.printf "class=%s ; impl=%s"
-        (Pp.string_of_ppcmds @@ Printer.pr_global inst.Typeclasses.is_class)
-        (Pp.string_of_ppcmds @@ Printer.pr_global inst.Typeclasses.is_impl))
-        insts*)
-
-  let sigma, func = interp_mutual_fixpoint env decl in
-  Log.printf "Function: %s" (Log.show_econstr env sigma func)
+  (* Add the function to the global environment. *)
+  let info =
+    Declare.Info.make ~kind:(Decls.IsDefinition Decls.Definition)
+      ~scope:(Locality.Global Locality.ImportDefaultBehavior) ()
+  in
+  let ref = Declare.declare_definition ~info
+    ~cinfo:(Declare.CInfo.make ~name:decl.name.v ~typ:(Some fix_type) ())
+    ~opaque:false ~body:func sigma in
+  Impargs.declare_manual_implicits false ref implicits

@@ -1,11 +1,8 @@
 From Stdlib Require Strings.PrimString.
 From Stdlib Require Import Relations Morphisms Setoid Program Bool Nat List Lia.
 From Equations Require Import Equations.
-From Metaprog Require Import
-  Prelude
-  Data.Term Data.Context
-  Meta.Monad
-  Effects.Print Effects.Fail Effects.Rec Effects.Evar.
+From Metaprog Require Import Prelude Data.Term Data.Context.
+From Metaprog.Control Require Import Meta Effects.Print Effects.Fail Effects.Rec Effects.Evar.
 
 Import ListNotations.
 Import PrimString.PStringNotations.
@@ -68,19 +65,16 @@ Context {Hevar : evarE -< E}.
 
 (** [whd_evars evm t] will check if [t] is a defined evar, and if yes replace
     it with its body. *)
-Definition whd_evars {s} (t : term s) : meta E (term s) :=
-  letrec% whd_evars s (t : term s) :=
-    match t with
-    | TEvar ev =>
-        let% def_opt := lookup_evar_def ev in
-        match def_opt with
-        | Some def => whd_evars s (wk def)
-        | None => ret (TEvar ev)
-        end
-    | _ => ret t
-    end
-  in
-  whd_evars s t.
+MetaFixpoint whd_evars {s} (t : term s) : meta E (term s) :=
+  match t with
+  | TEvar ev =>
+      let% def_opt := lookup_evar_def ev in
+      match def_opt with
+      | Some def => whd_evars (wk def)
+      | None => ret (TEvar ev)
+      end
+  | _ => ret t
+  end.
 
 (** [allM pred xs] checks if [pred] is true on all elements of [xs]. *)
 Fixpoint allM {E A} (pred : A -> meta E bool) (xs : list A) : meta E bool :=
@@ -111,26 +105,23 @@ Fixpoint mapM2 {E A1 A2 B} `{failE -< E} (f : A1 -> A2 -> meta E B) (xs : list A
   | _, _ => fail "mapM2: lengths don't match"
   end.
 
-Definition eq_term_evars {s} (t u : term s) : meta E bool :=
-  letrec% loop s (t : term s) (u : term s) : meta E bool :=
-    let% t := whd_evars t in
-    let% u := whd_evars u in
-    match t, u with
-    | TType, TType => ret true
-    | TVar x, TVar y => ret (index_eq x y)
-    | TLam x ty body, TLam x' ty' body' =>
-        loop _ ty ty' and% loop _ body (rename (replace_tag x) body')
-    | TProd x a b, TLam x' a' b' =>
-        loop _ a a' and% loop _ b (rename (replace_tag x) b')
-    | TApp f args, TApp f' args' =>
-      if Nat.eqb (List.length args) (List.length args')
-      then loop _ f f' and% allM2 (loop _) args args'
-      else ret false
-    | TEvar ev, TEvar ev' => ret (Nat.eqb ev ev')
-    | _, _ => ret false
-    end
-  in
-  loop s t u.
+MetaFixpoint eq_term_evars {s} (t u : term s) : meta E bool :=
+  let% t := whd_evars t in
+  let% u := whd_evars u in
+  match t, u with
+  | TType, TType => ret true
+  | TVar x, TVar y => ret (index_eq x y)
+  | TLam x ty body, TLam x' ty' body' =>
+      eq_term_evars ty ty' and% eq_term_evars body (rename (replace_tag x) body')
+  | TProd x a b, TLam x' a' b' =>
+      eq_term_evars a a' and% eq_term_evars b (rename (replace_tag x) b')
+  | TApp f args, TApp f' args' =>
+    if Nat.eqb (List.length args) (List.length args')
+    then eq_term_evars f f' and% allM2 eq_term_evars args args'
+    else ret false
+  | TEvar ev, TEvar ev' => ret (Nat.eqb ev ev')
+  | _, _ => ret false
+  end.
 
 (***********************************************************************)
 (** * Retyping. *)
@@ -148,27 +139,24 @@ retype_spine Γ f_ty (arg :: args) :=
 
 (** [retype evm Γ t] computes the type of [t] in context [Γ] and evar-map [evm].
     Assumes [t] is already well-typed. *)
-Definition retype {s} (Γ : context ∅ s) (t : term s) : meta E (term s) :=
-  letrec% retype s (Γ : context ∅ s) (t : term s) :=
-    match t with
-    | TVar x => ret (lookup_context x Γ)
-    | TType => ret TType
-    | TLam x ty body =>
-      let% body_ty := retype _ (CCons Γ x ty) body in
-      ret (TProd x ty body_ty)
-    | TProd x a b => ret TType
-    | TEvar ev =>
-      let% ev_type := lookup_evar_type ev in
-      match ev_type with
-      | Some ty => ret (wk ty)
-      | None => fail "retype: unbound evar"
-      end
-    | TApp f args =>
-      let% f_ty := retype _ Γ f in
-      retype_spine Γ f_ty args
+MetaFixpoint retype {s} (Γ : context ∅ s) (t : term s) : meta E (term s) :=
+  match t with
+  | TVar x => ret (lookup_context x Γ)
+  | TType => ret TType
+  | TLam x ty body =>
+    let% body_ty := retype (CCons Γ x ty) body in
+    ret (TProd x ty body_ty)
+  | TProd x a b => ret TType
+  | TEvar ev =>
+    let% ev_type := lookup_evar_type ev in
+    match ev_type with
+    | Some ty => ret (wk ty)
+    | None => fail "retype: unbound evar"
     end
-  in
-  retype s Γ t.
+  | TApp f args =>
+    let% f_ty := retype Γ f in
+    retype_spine Γ f_ty args
+  end.
 
 (***********************************************************************)
 (** * Unification result. *)
@@ -192,20 +180,17 @@ Definition stack (s : scope) : Type :=
   term s * list (term s).
 
 (** Normalize a stack. *)
-Definition norm_stack {s} (t : stack s) : meta E (stack s) :=
-  letrec% norm_stack s (t : stack s) :=
-    match t with
-    | (TEvar ev, args) =>
-      let% ev_def := lookup_evar_def ev in
-      match ev_def with
-      | Some def => norm_stack s (wk def, args)
-      | None => ret (TEvar ev , args)
-      end
-    | (TApp f args, args') => norm_stack _ (f, args ++ args')
-    | _ => ret t
+MetaFixpoint norm_stack {s} (t : stack s) : meta E (stack s) :=
+  match t with
+  | (TEvar ev, args) =>
+    let% ev_def := lookup_evar_def ev in
+    match ev_def with
+    | Some def => norm_stack (wk def, args)
+    | None => ret (TEvar ev , args)
     end
-  in
-  norm_stack s t.
+  | (TApp f args, args') => norm_stack (f, args ++ args')
+  | _ => ret t
+  end.
 
 Definition is_var {s} (t : term s) : meta E bool :=
   let% t := whd_evars t in
@@ -363,42 +348,39 @@ Section UnifyStep.
 
   Axiom todo : forall {A}, A.
 
-  Definition invert_term {s s'} (t : term s) (ys : list (index s)) (xs : list (index s')) : meta E (option (term s')) :=
-    letrec% invert_term s (t : term s) (ys : list (index s)) : meta E (option (term s')) :=
-      let% t := whd_evars t in
-      match t with
-      | TType => ret $ Some TType
-      | TVar y =>
-          let% x_opt := invert_index y ys xs in
-          match x_opt with
-          | Some x => ret $ Some (TVar x)
-          | None => ret None
-          end
-      | TLam x ty body =>
-          let% ty' := invert_term _ ty ys in
-          let% body' := invert_term _ body (map IS ys) in
-          match ty', body' with
-          | Some ty', Some body' => ret $ Some $ TLam x ty' (wk body')
-          | _, _ => ret None
-          end
-      | TProd x ty body =>
-          let% ty' := invert_term _ ty ys in
-          let% body' := invert_term _ body (map IS ys) in
-               match ty', body' with
-          | Some ty', Some body' => ret $ Some $ TProd x ty' (wk body')
-          | _, _ => ret None
-          end
-      | TApp f args =>
-          let% f' := invert_term _ f ys in
-          let% args' := mapM (fun arg => invert_term _ arg ys) args in
-          match f', option_sequence args' with
-          | Some f', Some args' => ret $ Some $ TApp f' args'
-          | _, _ => ret None
-          end
-      | TEvar ev => ret $ Some $ TEvar ev
-      end
-    in
-    invert_term s t ys.
+  MetaFixpoint invert_term {s s'} (t : term s) (ys : list (index s)) (xs : list (index s')) : meta E (option (term s')) :=
+    let% t := whd_evars t in
+    match t with
+    | TType => ret $ Some TType
+    | TVar y =>
+        let% x_opt := invert_index y ys xs in
+        match x_opt with
+        | Some x => ret $ Some (TVar x)
+        | None => ret None
+        end
+    | TLam x ty body =>
+        let% ty' := invert_term ty ys xs in
+        let% body' := invert_term body (map IS ys) xs in
+        match ty', body' with
+        | Some ty', Some body' => ret $ Some $ TLam x ty' (wk body')
+        | _, _ => ret None
+        end
+    | TProd x ty body =>
+        let% ty' := invert_term ty ys xs in
+        let% body' := invert_term body (map IS ys) xs in
+             match ty', body' with
+        | Some ty', Some body' => ret $ Some $ TProd x ty' (wk body')
+        | _, _ => ret None
+        end
+    | TApp f args =>
+        let% f' := invert_term f ys xs in
+        let% args' := mapM (fun arg => invert_term arg ys xs) args in
+        match f', option_sequence args' with
+        | Some f', Some args' => ret $ Some $ TApp f' args'
+        | _, _ => ret None
+        end
+    | TEvar ev => ret $ Some $ TEvar ev
+    end.
 
   (** [has_evar ev t] returns [true] if [ev] occurs in the term [t]. *)
   Equations has_evar {s} : evar_id -> term s -> bool :=
@@ -471,7 +453,7 @@ Section UnifyStep.
 End UnifyStep.
 
 (** Main entry point of the unification algorithm. *)
-Definition unify_stack {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
-  fix4 unify_step s Γ t u.
+MetaFixpoint unify_stack {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
+  unify_step (@unify_stack) Γ t u.
 
 End UnifAlgorithm.
