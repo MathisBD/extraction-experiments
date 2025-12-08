@@ -1,9 +1,12 @@
 From Metaprog Require Import Prelude Data.Term.
 
-(** This module defines contexts, *)
+(** This module defines local contexts, which store the types of local variables in
+    a given scope. *)
 
 (** [context s s'] is a context embedding terms from the inner scope [s']
-    into the outer scope [s]. *)
+    into the outer scope [s]. In other words:
+    - [s'] is an extension of [s].
+    - The context gives the types of all variables which are in [s'] but not in [s]. *)
 Inductive context (s : scope) : scope -> Type :=
 | CNil : context s s
 | CCons {s'} (ctx : context s s') (x : tag) (ty : term s') : context s (s' ▷ x).
