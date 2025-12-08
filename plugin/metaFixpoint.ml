@@ -45,13 +45,12 @@ let pick_fix_combinator (fname : Names.Id.t) (n_params : int) : Names.GlobRef.t 
   else if n_params = 5 then Rocqlib.lib_ref "metaprog.control.effects.rec.fix5"
   else Log.error "Meta fixpoint '%s' takes too many arguments (%d)" (Names.Id.to_string fname) n_params
 
-(** Count the number of parameters in a list of bindings. *)
-let rec count_parameters (binders : Constrexpr.local_binder_expr list) : int =
-  match binders with
-  | [] -> 0
-  | CLocalAssum (l, _, _, _) :: binders -> List.length l + count_parameters binders
-  | CLocalDef _ :: binders -> 1 + count_parameters binders
-  | CLocalPattern _ :: binders -> 1 + count_parameters binders
+(** Count the number of parameters of the function, given its type. *)
+let count_parameters env sigma (fix_type : EConstr.t) : int =
+  (* Some parameters might be in the return type, e.g. if the return type is [A -> meta E B].
+     To count correctly, we used reduction on the fixpoint type. *)
+  let ctx, _ = Reductionops.whd_decompose_prod env sigma fix_type in
+  List.length ctx
 
 (** Build and define the function corresponding to a meta fixpoint. *)
 let define_meta_fixpoint  (decl : vernac_meta_fixpoint) : unit =
@@ -78,7 +77,7 @@ let define_meta_fixpoint  (decl : vernac_meta_fixpoint) : unit =
   let functional = EConstr.mkNamedLambda sigma annot fix_type @@ EConstr.it_mkLambda_or_LetIn body args_ctx in
 
   (* Apply the fixpoint combinator the functional. *)
-  let n_params = count_parameters decl.binders in
+  let n_params = count_parameters env sigma fix_type in
   let rocq_fix = pick_fix_combinator decl.name.v n_params in
   (* We need 1 evar for [E : Type -> Type], 1 evar for [recE E -< E],
      1 evar for the type of each argument, and 1 evar for the return type. *)
@@ -95,6 +94,7 @@ let define_meta_fixpoint  (decl : vernac_meta_fixpoint) : unit =
   (* Check the fixpoint is truly recursive, i.e. check the body contains the fixpoint parameter. *)
   let is_recursive = Termops.occur_var env_body sigma decl.name.v body in
   if not is_recursive then warn_non_recursive ();
+
 
   (* Add the function to the global environment. *)
   let info =

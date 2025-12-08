@@ -453,7 +453,7 @@ Section UnifyStep.
 End UnifyStep.
 
 (** Main entry point of the unification algorithm. *)
-MetaFixpoint unify_stack {s} (Γ : context ∅ s) (t u : stack s) : meta E bool :=
-  unify_step (@unify_stack) Γ t u.
+MetaFixpoint unify_stack {s} : context ∅ s -> stack s -> stack s -> meta E bool :=
+  unify_step (@unify_stack).
 
 End UnifAlgorithm.
