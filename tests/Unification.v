@@ -346,8 +346,6 @@ Section UnifyStep.
   invert_index y0 [] [] := ret None ;
   invert_index _ _ _ := fail "invert_index: lengths don't match".
 
-  Axiom todo : forall {A}, A.
-
   MetaFixpoint invert_term {s s'} (t : term s) (ys : list (index s)) (xs : list (index s')) : meta E (option (term s')) :=
     let% t := whd_evars t in
     match t with
