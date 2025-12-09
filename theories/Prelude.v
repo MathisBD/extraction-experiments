@@ -1,5 +1,4 @@
-From Stdlib Require Export Bool Nat List.
-From Stdlib Require Export PrimString.
+From Stdlib Require Export Bool Nat List Lia PrimString Relations Morphisms.
 From Equations Require Export Equations.
 
 Export PrimString.PStringNotations.
@@ -8,6 +7,27 @@ Export List.ListNotations.
 (** Right-associative function application. *)
 Notation "f '$' x" := (f x)
   (at level 67, right associativity, only parsing).
+
+Ltac split3 := split ; [|split].
+Ltac split4 := split ; [|split3].
+Ltac split5 := split ; [|split4].
+Ltac split6 := split ; [|split5].
+Ltac split7 := split ; [|split6].
+Ltac split8 := split ; [|split7].
+
+(** On a hypothesis of the form [H : A -> B], [feed H] generates two goals:
+    - the first asks to prove [A].
+    - the second asks to prove the original goal in a context where [H : A]. *)
+Ltac feed H :=
+  match type of H with
+  | ?A -> ?B =>
+    let HA := fresh "H" in
+    assert (HA : A) ; [| specialize (H HA)]
+  end.
+
+Ltac feed2 H := feed H ; [| feed H].
+Ltac feed3 H := feed H ; [| feed2 H].
+Ltac feed4 H := feed H ; [| feed3 H].
 
 (** Compute the sum of a list of naturals.
     Returns [0] if the list is empty. *)
@@ -37,3 +57,23 @@ Notation "{ x & P & Q & R }" := (sigT3 (fun x => P) (fun x => Q) (fun x => R))
 Notation "⟨ x , y ⟩" := (existT _ x y).
 Notation "⟨ x , y1 , y2 ⟩" := (existT2 _ _ x y1 y2).
 Notation "⟨ x , y1 , y2 , y3 ⟩" := (existT3 _ _ _ x y1 y2 y3).
+
+(** [OnOne2 P xs ys] means that the lists [xs] and [ys] are equal except at
+    exactly one position, and at these positions the elements are related by [P]. *)
+Inductive OnOne2 {A} (P : A -> A -> Prop) : list A -> list A -> Prop :=
+| Exists2_head x x' xs : P x x' -> OnOne2 P (x :: xs) (x' :: xs)
+| Exists2_tail x xs xs' : OnOne2 P xs xs' -> OnOne2 P (x :: xs) (x :: xs').
+
+Lemma OnOne2_length {A} (P : A -> A -> Prop) xs ys :
+  OnOne2 P xs ys -> List.length xs = List.length ys.
+Proof. intros H. induction H ; cbn ; lia. Qed.
+
+(** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
+    In particular [xs] and [ys] must have the same length. *)
+Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=
+| All2_nil : All2 P [] []
+| All2_cons x xs y ys : P x y -> All2 P xs ys -> All2 P (x :: xs) (y :: ys).
+
+Lemma All2_length {A B} (P : A -> B -> Prop) xs ys :
+  All2 P xs ys -> List.length xs = List.length ys.
+Proof. intros H ; induction H ; cbn ; lia. Qed.

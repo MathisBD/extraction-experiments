@@ -18,6 +18,8 @@ From Metaprog Require Import Prelude.
 Inductive tag : Prop :=
 | TAG.
 
+Derive NoConfusion for tag.
+
 (** [scope] is isomorphic to the set of natural numbers [nat], but additionally
     contains phantom tags.
 

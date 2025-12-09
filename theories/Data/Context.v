@@ -14,6 +14,8 @@ Inductive context (s : scope) : scope -> Type :=
 Arguments CNil {s}.
 Arguments CCons {s s'}.
 
+Derive Signature NoConfusion for context.
+
 (** Lookup the type of a variable in a full context. *)
 Equations lookup_context {s} : index s -> context ∅ s -> term s :=
 lookup_context I0 (CCons ctx x ty) := wk ty ;
