@@ -1,3 +1,4 @@
+(** This module implements the [MetaFixpoint] command. *)
 
 (** [vernac_meta_fixpoint] is what we get after parsing a meta fixpoint definition. *)
 type vernac_meta_fixpoint = {

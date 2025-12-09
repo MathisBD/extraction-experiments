@@ -57,7 +57,7 @@ let define_meta_fixpoint  (decl : vernac_meta_fixpoint) : unit =
   let env = Global.env () in
 
   (* Interpret the type of the fixpoint parameter, allowing for unresolved evars. *)
-  let sigma, univs = Constrintern.interp_univ_decl_opt env decl.univs in
+  let sigma, udecl = Constrintern.interp_univ_decl_opt env decl.univs in
   let sigma, (impls, ((env_args, args_ctx), ctx_implicits, _)) = Constrintern.interp_context_evars env sigma decl.binders in
   let sigma, (rtype, rtype_implicits) = Constrintern.interp_type_evars_impls ~impls env_args sigma decl.rtype in
   let fix_type = Evarutil.nf_evar sigma (EConstr.it_mkProd_or_LetIn rtype args_ctx) in
@@ -95,13 +95,14 @@ let define_meta_fixpoint  (decl : vernac_meta_fixpoint) : unit =
   let is_recursive = Termops.occur_var env_body sigma decl.name.v body in
   if not is_recursive then warn_non_recursive ();
 
-
   (* Add the function to the global environment. *)
   let info =
-    Declare.Info.make ~kind:(Decls.IsDefinition Decls.Definition)
+    Declare.Info.make ~kind:(Decls.IsDefinition Decls.Definition) ~udecl
       ~scope:(Locality.Global Locality.ImportDefaultBehavior) ()
   in
-  let ref = Declare.declare_definition ~info
-    ~cinfo:(Declare.CInfo.make ~name:decl.name.v ~typ:(Some fix_type) ())
-    ~opaque:false ~body:func sigma in
-  Impargs.declare_manual_implicits false ref implicits
+  let _ =
+    Declare.declare_definition ~info
+      ~cinfo:(Declare.CInfo.make ~name:decl.name.v ~typ:(Some fix_type) ~impargs:implicits ())
+      ~opaque:false ~body:func sigma
+  in
+  ()
