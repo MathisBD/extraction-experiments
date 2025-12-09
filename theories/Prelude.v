@@ -58,22 +58,64 @@ Notation "⟨ x , y ⟩" := (existT _ x y).
 Notation "⟨ x , y1 , y2 ⟩" := (existT2 _ _ x y1 y2).
 Notation "⟨ x , y1 , y2 , y3 ⟩" := (existT3 _ _ _ x y1 y2 y3).
 
-(** [OnOne2 P xs ys] means that the lists [xs] and [ys] are equal except at
-    exactly one position, and at these positions the elements are related by [P]. *)
-Inductive OnOne2 {A} (P : A -> A -> Prop) : list A -> list A -> Prop :=
-| Exists2_head x x' xs : P x x' -> OnOne2 P (x :: xs) (x' :: xs)
-| Exists2_tail x xs xs' : OnOne2 P xs xs' -> OnOne2 P (x :: xs) (x :: xs').
+Section ListPredicates.
 
-Lemma OnOne2_length {A} (P : A -> A -> Prop) xs ys :
-  OnOne2 P xs ys -> List.length xs = List.length ys.
-Proof. intros H. induction H ; cbn ; lia. Qed.
+  (** [OnOne2 P xs ys] means that the lists [xs] and [ys] are equal except at
+      exactly one position, and at these positions the elements are related by [P]. *)
+  Inductive OnOne2 {A} (P : A -> A -> Prop) : list A -> list A -> Prop :=
+  | OnOne2_head x x' xs : P x x' -> OnOne2 P (x :: xs) (x' :: xs)
+  | OnOne2_tail x xs xs' : OnOne2 P xs xs' -> OnOne2 P (x :: xs) (x :: xs').
 
-(** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
-    In particular [xs] and [ys] must have the same length. *)
-Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=
-| All2_nil : All2 P [] []
-| All2_cons x xs y ys : P x y -> All2 P xs ys -> All2 P (x :: xs) (y :: ys).
+  Lemma OnOne2_length {A} (P : A -> A -> Prop) xs ys :
+    OnOne2 P xs ys -> List.length xs = List.length ys.
+  Proof. intros H. induction H ; cbn ; lia. Qed.
 
-Lemma All2_length {A B} (P : A -> B -> Prop) xs ys :
-  All2 P xs ys -> List.length xs = List.length ys.
-Proof. intros H ; induction H ; cbn ; lia. Qed.
+  Lemma OnOne2_app_l {A} (P : A -> A -> Prop) xs xs' ys :
+    OnOne2 P xs xs' -> OnOne2 P (xs ++ ys) (xs' ++ ys).
+  Proof.
+  intros H. induction H ; cbn.
+  - now apply OnOne2_head.
+  - now apply OnOne2_tail.
+  Qed.
+
+  Lemma OnOne2_app_r {A} (P : A -> A -> Prop) xs ys ys' :
+    OnOne2 P ys ys' -> OnOne2 P (xs ++ ys) (xs ++ ys').
+  Proof.
+  intros H. induction xs ; cbn.
+  - assumption.
+  - now apply OnOne2_tail.
+  Qed.
+
+  (** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
+      In particular [xs] and [ys] must have the same length. *)
+  Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=
+  | All2_nil : All2 P [] []
+  | All2_cons x xs y ys : P x y -> All2 P xs ys -> All2 P (x :: xs) (y :: ys).
+
+  Lemma All2_length {A B} (P : A -> B -> Prop) xs ys :
+    All2 P xs ys -> List.length xs = List.length ys.
+  Proof. intros H ; induction H ; cbn ; lia. Qed.
+
+  Lemma All2_app {A B} (P : A -> B -> Prop) xs xs' ys ys' :
+    All2 P xs xs' -> All2 P ys ys' -> All2 P (xs ++ ys) (xs' ++ ys').
+  Proof.
+  intros H1 H2. induction H1 ; cbn.
+  - assumption.
+  - now constructor.
+  Qed.
+
+  Lemma All2_same {A} (P : A -> A -> Prop) xs :
+    Reflexive P -> All2 P xs xs.
+  Proof. intros HR. induction xs ; now constructor. Qed.
+
+  Lemma OnOne2_All2 {A} (P : A -> A -> Prop) xs ys :
+    Reflexive P -> OnOne2 P xs ys -> All2 P xs ys.
+  Proof.
+  intros HR H. induction H ; constructor.
+  - assumption.
+  - now apply All2_same.
+  - reflexivity.
+  - assumption.
+  Qed.
+
+End ListPredicates.

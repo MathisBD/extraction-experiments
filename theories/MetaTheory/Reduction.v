@@ -143,6 +143,21 @@ Section CongruenceLemmas.
     + etransitivity ; eauto.
   Qed.
 
+  Lemma red_app_congr_aux (f : term s) l (args args' : list (term s)) :
+    All2 red args args' ->
+    red (TApp f (l ++ args)) (TApp f (l ++ args')).
+  Proof.
+  intros H. revert f l. depind H ; intros f l.
+  - reflexivity.
+  - transitivity (TApp f (l ++ y :: xs)).
+    + clear IHAll2 H0. induction H.
+      * apply red_of_red1, red1_app_r. apply OnOne2_app_r, OnOne2_head. assumption.
+      * reflexivity.
+      * etransitivity ; eauto.
+    + specialize (IHAll2 f (l ++ [y])). rewrite <-!app_assoc in IHAll2.
+      cbn in IHAll2. exact IHAll2.
+  Qed.
+
   Lemma red_app_congr (f f' : term s) args args' :
     red f f' ->
     All2 red args args' ->
@@ -153,9 +168,8 @@ Section CongruenceLemmas.
     + apply red_of_red1. now constructor.
     + reflexivity.
     + etransitivity ; eauto.
-  - clear f Hf.
-
-  Admitted.
+  - clear f Hf. apply red_app_congr_aux with (l := []). assumption.
+  Qed.
 
 End CongruenceLemmas.
 

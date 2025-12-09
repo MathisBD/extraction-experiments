@@ -60,7 +60,7 @@ Qed.
 Section CongruenceLemmas.
   Context {s : scope}.
 
-  Lemma conv_beta_congr x (ty : term s) body arg args :
+  Lemma conv_beta x (ty : term s) body arg args :
     conv (TApp (TLam x ty body) (arg :: args)) (TApp (body[x := arg]) args).
   Proof. apply conv_of_red1. constructor. Qed.
 
@@ -100,10 +100,26 @@ Section CongruenceLemmas.
     + etransitivity ; eauto.
   Qed.
 
+  Lemma conv_app_congr_aux (f : term s) l (args args' : list (term s)) :
+    All2 conv args args' ->
+    conv (TApp f (l ++ args)) (TApp f (l ++ args')).
+  Proof.
+  intros H. revert f l. depind H ; intros f l.
+  - reflexivity.
+  - transitivity (TApp f (l ++ y :: xs)).
+    + clear IHAll2 H0. induction H.
+      * apply conv_of_red1, red1_app_r. apply OnOne2_app_r, OnOne2_head. assumption.
+      * reflexivity.
+      * now symmetry.
+      * etransitivity ; eauto.
+    + specialize (IHAll2 f (l ++ [y])). rewrite <-!app_assoc in IHAll2.
+      cbn in IHAll2. exact IHAll2.
+  Qed.
+
   Lemma conv_app_congr (f f' : term s) args args' :
     conv f f' ->
     All2 conv args args' ->
-    conv (TApp f args) (TApp f' args).
+    conv (TApp f args) (TApp f' args').
   Proof.
   intros Hf Hargs. transitivity (TApp f' args).
   - clear Hargs. induction Hf.
@@ -111,10 +127,8 @@ Section CongruenceLemmas.
     + reflexivity.
     + now symmetry.
     + etransitivity ; eauto.
-  - clear Hf. induction Hargs.
-    + reflexivity.
-    + admit.
-  Admitted.
+  - apply conv_app_congr_aux with (l := []). assumption.
+  Qed.
 
 End CongruenceLemmas.
 
