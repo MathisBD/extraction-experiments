@@ -5,6 +5,14 @@ From Metaprog Require Import Prelude.
     in the plugin (file "plugin/extraction.ml"). *)
 
 (*******************************************************************)
+(** * OCaml functions used in Rocq. *)
+(*******************************************************************)
+
+(** Ocaml's [Obj.magic]. *)
+Parameter ocaml_obj_magic : forall {A B}, A -> B.
+Extract Inlined Constant ocaml_obj_magic => "Obj.magic".
+
+(*******************************************************************)
 (** * Extraction for built-in datatypes. *)
 (*******************************************************************)
 
@@ -48,25 +56,35 @@ Extract Constant PrimString.compare =>
 (** This module defines persistent vectors [Vec.t A] on elements of type [A].
     Vectors are meant solely for extraction to OCaml: use with caution! *)
 Module Vec.
+  (** [Vec.t A] is the type of vectors with element type [A].
+      Vectors can grow dynamically to accomodate more elements. *)
   Parameter t : Type -> Type.
   Extract Constant t "'a" => "'a MyPlugin.Extraction.Vec.t".
 
+  (** Get the length of a vector. *)
+  Parameter length : forall {A}, t A -> nat.
+  Extract Inlined Constant length => "MyPlugin.Extraction.Vec.length".
+
+  (** The empty vector. *)
   Parameter empty : forall {A}, unit -> t A.
   Extract Inlined Constant empty => "MyPlugin.Extraction.Vec.empty".
 
+  (** Add an element to the end of a vector. *)
   Parameter add : forall {A}, t A -> A -> t A.
   Extract Inlined Constant add => "MyPlugin.Extraction.Vec.add".
 
+  (** Remove the last element of a vector. Fails if the vector is empty. *)
   Parameter pop : forall {A}, t A -> t A * A.
   Extract Inlined Constant pop => "MyPlugin.Extraction.Vec.pop".
 
+  (** Get an element at a specific index in a vector.
+      Fails if the index is out of bounds. *)
   Parameter get : forall {A}, t A -> nat -> A.
   Extract Inlined Constant get => "MyPlugin.Extraction.Vec.get".
 
+  (** Replace an element at a specific index in a vector.
+      Fails if the index is out of bounds. *)
   Parameter set : forall {A}, t A -> nat -> A -> t A.
   Extract Inlined Constant set => "MyPlugin.Extraction.Vec.set".
-
-  Parameter length : forall {A}, t A -> nat.
-  Extract Inlined Constant length => "MyPlugin.Extraction.Vec.length".
 
 End Vec.

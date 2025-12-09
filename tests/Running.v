@@ -1,94 +1,18 @@
 From Stdlib Require Strings.PrimString.
-From Metaprog.Control Require Import Meta Effects.Print Effects.Fail Effects.Iter Effects.Rec.
+From Metaprog.Control Require Import Meta Command Effects.All.
 From Metaprog.Extraction Require Import All.
 
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.
 
-(*******************************************************************)
-(** * Concrete effect. *)
-(*******************************************************************)
-
-(** A concrete effect. *)
-Inductive E (A : Type) : Type :=
-| E_printE (e : printE A)
-| E_failE (e : failE A)
-| E_iterE (e : iterE E A)
-| E_recE (e : recE E A).
-
-Arguments E_printE {A}.
-Arguments E_failE {A}.
-Arguments E_iterE {A}.
-Arguments E_recE {A}.
-
-Instance subeffect_printE : printE -< E := { inj_effect := @E_printE }.
-Instance subeffect_failE : failE -< E := { inj_effect := @E_failE }.
-Instance subeffect_iterE : iterE E -< E := { inj_effect := @E_iterE }.
-Instance subeffect_recE : recE E -< E := { inj_effect := @E_recE }.
-
-(** Run an hitree computation with effect [E]. *)
-Fixpoint ocaml_run_hitree {A} (n : fuel) (fs : Vec.t (fun_entry E)) (t : meta E A) : A :=
-  match n with NoFuel => ocaml_handle_Fail _ "ocaml_run_hitree: out of fuel (should not happen)" | OneMoreFuel n =>
-  match t with
-  (* Return. *)
-  | Return x => x
-  (* Bind. *)
-  | Bind t f =>
-    let x := ocaml_run_hitree n fs t in
-    ocaml_run_hitree n fs (f x)
-  (* Print effect. *)
-  | Vis (E_printE e) =>
-    match e with
-    | Print s => ocaml_handle_Print s
-    end
-  (* Failure effect. *)
-  | Vis (E_failE e) =>
-    match e with
-    | Fail s => ocaml_handle_Fail _ s
-    end
-  (* Iteration effect. *)
-  | Vis (E_iterE e) =>
-    match e with
-    | Iter init step =>
-      let ab := ocaml_run_hitree n fs (step init) in
-      match ab with
-      | Continue a => ocaml_run_hitree n fs (iter a step)
-      | Break b => b
-      end
-    end
-  (* Recursion effect. *)
-  | Vis (E_recE e) =>
-    match e with
-    (* MkFix: add the function to the environment and run the body. *)
-    | @MkFix _ A B F a =>
-      let k := Key A B (Vec.length fs) in
-      let ent := mk_entry E A B (F k) in
-      ocaml_run_hitree n (Vec.add fs ent) (F k a)
-    (* Call: Lookup the function in the environment.
-       This will crash if the function in the environment has the incorrect type. *)
-    | Call (Key _ _ x) a =>
-      let e := Vec.get fs x in
-      ocaml_run_hitree n fs (ocaml_obj_magic (entry_fun e (ocaml_obj_magic a)))
-    end
-  end
-  end.
-
-(*******************************************************************)
-(** * Testing. *)
-(*******************************************************************)
-
-Definition prg : meta E unit :=
+Definition prg : meta commandE unit :=
   (for% i = 1 to 10 do print "hello") >>
   print "done".
 
-(*Definition prg_rec : meta E unit :=
-  letrec% loop i : meta E unit :=
-    if Nat.ltb i 5 then print "hello" >> loop (i + 1)
-    else ret tt
-  in
-  loop 1.*)
+MetaFixpoint prg_rec i : meta commandE unit :=
+  if Nat.ltb i 5 then print "hello" >> prg_rec (i + 1)
+  else ret tt.
 
-Definition test : unit :=
-  ocaml_run_hitree NoFuel (Vec.empty tt) prg.
+Definition test : unit := run_command (prg_rec 0).
 
 Time Test test.
