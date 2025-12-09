@@ -73,6 +73,11 @@ type term =
 | TApp of term * term list
 | TEvar of evar_id
 
+type evar_entry = {
+  evar_type : term ;
+  evar_def : term option
+}
+
 (** [idx] lives in scope [s]. *)
 let rec index_of_int (s : scope) (idx : int) : index =
   if idx <= 0 then I0 s
@@ -160,9 +165,26 @@ let handle_FreshEvar (evm : Evd.evar_map) (ty : term) : Evd.evar_map * evar_id =
   else
     Log.error "handle_FreshEvar: created evar with non-empty suspended substitution"
 
-(*let handle_get_definition (env : Environ.env) (str : Pstring.t) : term =
-  let kname = Smartlocate.global_constant_with_alias (Libnames.qualid_of_string @@ Pstring.to_string str) in
-  let kbody = Environ.lookup_constant kname env in
-  match kbody.const_body with
-  | Def d -> term_of_constr 0 d
-  | _ -> Log.error "Constant %s has no body" (Pstring.to_string str)*)
+let handle_LookupEvar (evm : Evd.evar_map) (ev : evar_id) : evar_entry option =
+  let ev = Evar.unsafe_of_int ev in
+  (* Lookup the evar. *)
+  match Evd.find evm ev with
+  | exception Not_found -> None
+  | EvarInfo info ->
+    (* Check the context is empty. *)
+    let ctx = Evd.evar_context info in
+    if List.length ctx <> 0 then Log.error "handle_LookupEvar: got an evar with non-empty context" ;
+    (* Check if the evar is defined. *)
+    match Evd.evar_body info with
+    | Evar_empty ->
+      let ty = term_of_econstr evm 0 (Evd.evar_concl info) in
+      Some { evar_type = ty ; evar_def = None }
+    | Evar_defined def ->
+      let ty = term_of_econstr evm 0 @@ Retyping.get_type_of (Global.env ()) evm def in
+      let def = term_of_econstr evm 0 def in
+      Some { evar_type = ty ; evar_def = Some def }
+
+let handle_DefineEvar (evm : Evd.evar_map) (ev : evar_id) (def : term) : Evd.evar_map =
+  let evm, def = econstr_of_term evm def in
+  let evm = Evd.define (Evar.unsafe_of_int ev) def evm in
+  evm

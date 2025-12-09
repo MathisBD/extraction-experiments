@@ -25,6 +25,12 @@ Extract Inlined Constant ocaml_handle_Fail => "MyPlugin.Extraction.handle_Fail".
 Parameter ocaml_handle_FreshEvar : ocaml_evar_map -> term ∅ -> ocaml_evar_map * evar_id.
 Extract Inlined Constant ocaml_handle_FreshEvar => "MyPlugin.Extraction.handle_FreshEvar".
 
+Parameter ocaml_handle_LookupEvar : ocaml_evar_map -> evar_id -> option evar_entry.
+Extract Inlined Constant ocaml_handle_LookupEvar => "MyPlugin.Extraction.handle_LookupEvar".
+
+Parameter ocaml_handle_DefineEvar : ocaml_evar_map -> evar_id -> term ∅ -> ocaml_evar_map.
+Extract Inlined Constant ocaml_handle_DefineEvar => "MyPlugin.Extraction.handle_DefineEvar".
+
 (*******************************************************************)
 (** * Running metaprograms with the [commandE] effect. *)
 (*******************************************************************)
@@ -99,8 +105,8 @@ Fixpoint run_command_rec {A} (n : fuel) (fs : Vec.t (fun_entry commandE))
   | Vis (command_evar e) =>
     match e with
     | FreshEvar ty => ocaml_handle_FreshEvar evm ty
-    | LookupEvar ev => ocaml_handle_Fail _ "todo: LookupEvar"
-    | DefineEvar ev def => ocaml_handle_Fail _ "todo: DefineEvar"
+    | LookupEvar ev => (evm, ocaml_handle_LookupEvar evm ev)
+    | DefineEvar ev def => (ocaml_handle_DefineEvar evm ev def, tt)
     end
   end
   end.
