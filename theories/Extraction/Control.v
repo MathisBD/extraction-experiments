@@ -98,7 +98,7 @@ Fixpoint run_command_rec {A} (n : fuel) (fs : Vec.t (fun_entry commandE))
     end
   | Vis (command_evar e) =>
     match e with
-    | FreshEvar ty => ocaml_handle_Fail _ "todo: FreshEvar"
+    | FreshEvar ty => ocaml_handle_FreshEvar evm ty
     | LookupEvar ev => ocaml_handle_Fail _ "todo: LookupEvar"
     | DefineEvar ev def => ocaml_handle_Fail _ "todo: DefineEvar"
     end

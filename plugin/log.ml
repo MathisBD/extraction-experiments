@@ -16,3 +16,8 @@ let show_econstr env sigma t : string =
 (** Print the raw representation of a [Constr.t] to a string. *)
 let show_constr_raw t : string =
   Pp.string_of_ppcmds @@ Constr.debug_print t
+
+(** Print the raw representation of an [EConstr.t] to a string. *)
+let show_econstr_raw evm t : string =
+  let t_raw = EConstr.to_constr ~abort_on_undefined_evars:false evm t in
+  Pp.string_of_ppcmds @@ Constr.debug_print t_raw

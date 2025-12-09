@@ -10,7 +10,7 @@ Extract Inductive scope => "int" [ "0" "Stdlib.Int.succ" ]
   "MyPlugin.Extraction.nat_elim".
 
 Extract Inductive index => "MyPlugin.Extraction.index"
-  [ "MyPlugin.Extraction.I0" "MyPlugin.Extraction.I0" ].
+  [ "MyPlugin.Extraction.I0" "MyPlugin.Extraction.IS" ].
 
 Extract Inductive term => "MyPlugin.Extraction.term"
   [ "MyPlugin.Extraction.TType"

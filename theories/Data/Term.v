@@ -346,3 +346,15 @@ Next Obligation. constructor. intros i. depelim i. Defined.
 (** [wk t] weakens term [t] to the current scope. *)
 Definition wk {s s'} `{ScopeIncl s s'} (t : term s) : term s' :=
   rename wk_idx t.
+
+(** [lam ty body] builds the lambda abstraction [fun x : ty => body] in HOAS style. *)
+Definition lam {s} (ty : term s) (body : forall x, term (s ▷ x)) : term s :=
+  TLam TAG ty (body TAG).
+
+(** [lam ty body] builds the dependent product [forall x : a, b] in HOAS style. *)
+Definition prod {s} (a : term s) (b : forall x, term (s ▷ x)) : term s :=
+  TProd TAG a (b TAG).
+
+(** [arrow a b] builds the non-dependent product [a -> b]. *)
+Definition arrow {s} (a b : term s) : term s :=
+  TProd TAG a (wk b).
