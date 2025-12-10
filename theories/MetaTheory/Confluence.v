@@ -21,7 +21,7 @@ Inductive pred1 {s} : term s -> term s -> Prop :=
     All2 pred1 args args' ->
     pred1 (TApp (TLam x ty body) (arg :: args)) (TApp (body'[x := arg']) args')
 
-(** Congrence rules. *)
+(** Congruence rules. *)
 
 | pred1_type :
     pred1 TType TType
@@ -213,43 +213,154 @@ intros Ht Hσ. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
 Qed.
 
 (***********************************************************************)
+(** * Joinability for parallel reduction. *)
+(***********************************************************************)
+
+(** Two terms are joinable if they have a common reduct for [pred1]. *)
+Definition joinable {s} (t1 t2 : term s) : Prop :=
+  exists u, pred1 t1 u /\ pred1 t2 u.
+
+#[export] Instance joinable_Reflexive s : Reflexive (@joinable s).
+Proof. intros t. exists t. now split. Qed.
+
+#[export] Instance joinable_Symmetric s : Symmetric (@joinable s).
+Proof. intros t1 t2. unfold joinable. firstorder. Qed.
+
+(** Two substitutions are joinable if they are pointwise joinable. *)
+Definition joinable_subst {s s'} (σ1 σ2 : subst s s') : Prop :=
+  exists σ, pred1_subst σ1 σ /\ pred1_subst σ2 σ.
+
+#[export] Instance joinable_subst_Reflexive s s' : Reflexive (@joinable_subst s s').
+Proof. intros σ. exists σ. split ; reflexivity. Qed.
+
+#[export] Instance joinable_subst_Symmetric s s' : Symmetric (@joinable_subst s s').
+Proof. intros σ1 σ2 (σ & H1 & H2). exists σ. firstorder. Qed.
+
+Lemma joinable_scons {x s s'} t1 t2 (σ1 σ2 : subst s s') :
+  joinable t1 t2 ->
+  joinable_subst σ1 σ2 ->
+  joinable_subst (scons x t1 σ1) (scons x t2 σ2).
+Proof.
+intros (t & Ht1 & Ht2) (σ & Hσ1 & Hσ2). exists (scons x t σ).
+split ; now apply pred1_subst_scons.
+Qed.
+
+Lemma joinable_substitute {s s'} (t1 t2 : term s) (σ1 σ2 : subst s s') :
+  joinable t1 t2 ->
+  joinable_subst σ1 σ2 ->
+  joinable (substitute σ1 t1) (substitute σ2 t2).
+Proof.
+intros (t & Ht1 & Ht2) (σ & Hσ1 & Hσ2). exists (substitute σ t).
+split ; now apply pred1_substitute.
+Qed.
+
+Lemma joinable_lam {s x} (ty1 ty2 : term s) body1 body2 :
+  joinable ty1 ty2 ->
+  joinable body1 body2 ->
+  joinable (TLam x ty1 body1) (TLam x ty2 body2).
+Proof.
+intros (ty & Hty1 & Hty2) (body & Hbody1 & Hbody2).
+exists (TLam x ty body). split ; apply pred1_lam ; assumption.
+Qed.
+
+Lemma joinable_prod {s x} (a1 a2 : term s) b1 b2 :
+  joinable a1 a2 ->
+  joinable b1 b2 ->
+  joinable (TProd x a1 b1) (TProd x a2 b2).
+Proof.
+intros (a & Ha1 & Ha2) (b & Hb1 & Hb2).
+exists (TProd x a b). split ; apply pred1_prod ; assumption.
+Qed.
+
+Lemma joinable_list {s} (args1 args2 : list (term s)) :
+  All2 joinable args1 args2 ->
+  exists args, All2 pred1 args1 args /\ All2 pred1 args2 args.
+Proof.
+intros H. induction H.
+- exists []. split ; constructor.
+- destruct H as (z & Hx & Hy). destruct IHAll2 as (args & Hargs1 & Hargs2).
+  exists (z :: args). split ; constructor ; assumption.
+Qed.
+
+Lemma joinable_app {s} (f1 f2 : term s) args1 args2 :
+  joinable f1 f2 ->
+  All2 joinable args1 args2 ->
+  joinable (TApp f1 args1) (TApp f2 args2).
+Proof.
+intros (f & Hf1 & Hf2) Hargs. apply joinable_list in Hargs.
+destruct Hargs as (args & Hargs1 & Hargs2).
+exists (TApp f args). split ; apply pred1_app ; assumption.
+Qed.
+
+Lemma joinable_beta {s x} (ty1 ty2 : term s) body1 body2 (arg1 arg2 : term s) args1 args2 :
+  joinable ty1 ty2 ->
+  joinable body1 body2 ->
+  joinable arg1 arg2 ->
+  All2 joinable args1 args2 ->
+  joinable (TApp (body1[x := arg1]) args1) (TApp (TLam x ty2 body2) (arg2 :: args2)).
+Proof.
+intros (ty & Hty1 & Hty2) (body & Hbody1 & Hbody2) (arg & Harg1 & Harg2) Hargs.
+apply joinable_list in Hargs. destruct Hargs as (args & Hargs1 & Hargs2).
+exists (TApp (body[x := arg]) args). split.
+- apply pred1_app.
+  + apply pred1_substitute ; [| apply pred1_subst_scons].
+    * assumption.
+    * assumption.
+    * reflexivity.
+  + assumption.
+- now eapply pred1_app_beta.
+Qed.
+
+(***********************************************************************)
 (** * Diamond property for parallel reduction. *)
 (***********************************************************************)
 
-Lemma pred1_diamond {s} :
-  diamond (@pred1 s) (@pred1 s).
+(** Just a weird consequence lemma for [All2] needed to prove the diamond property. *)
+Lemma All2_weird_consequence {A} (P Q R : A -> A -> Prop) xs ys zs :
+  (forall x y z, P y x -> Q y z -> R x z) ->
+  All2 P ys xs -> All2 Q ys zs -> All2 R xs zs.
 Proof.
-intros t u1 u2 H1 H2. depind H1.
-- depelim H2.
-  + apply IHpred1_1 in H2_. destruct H2_ as (vty & Hvty & Hvty').
-    apply IHpred1_2 in H2_0. destruct H2_0 as (vbody & Hvbody & Hvbody').
-    apply IHpred1_3 in H2_1. destruct H2_1 as (varg & Hvarg & Hvarg').
-    assert (exists vargs, All2 pred1 args' vargs /\ All2 pred1 args'0 vargs) as (vargs & Hvargs & Hvargs').
-    { admit. }
-    exists (TApp (substitute (scons x varg sid) vbody) vargs). split.
-    * apply pred1_app ; [apply pred1_substitute |] ; try assumption.
-      now apply pred1_subst_scons.
-    * apply pred1_app ; [apply pred1_substitute |] ; try assumption.
-      now apply pred1_subst_scons.
-  + admit.
-- depelim H2. now eexists.
-- depelim H2. now eexists.
-- depelim H2. apply IHpred1_1 in H2_. apply IHpred1_2 in H2_0.
-  destruct H2_ as (v & Hv1 & Hv2). destruct H2_0 as (u & Hu1 & Hu2).
-  exists (TLam x v u). split ; apply pred1_lam ; assumption.
-- depelim H2. apply IHpred1_1 in H2_. apply IHpred1_2 in H2_0.
-  destruct H2_ as (v & Hv1 & Hv2). destruct H2_0 as (u & Hu1 & Hu2).
-  exists (TProd x v u). split ; apply pred1_prod ; assumption.
-- admit.
-- depelim H2. now eexists.
-Admitted.
+intros H HP HQ. revert zs HQ. depind HP ; intros zs HQ ; depelim HQ ; constructor.
+- firstorder.
+- firstorder.
+Qed.
 
+(** [pred1] has the diamond property. *)
+Lemma pred1_diamond {s} (t u1 u2 : term s) :
+  pred1 t u1 -> pred1 t u2 -> joinable u1 u2.
+Proof.
+intros H1 H2. depind H1 ; depelim H2 ; try reflexivity.
+- apply joinable_app ; [apply joinable_substitute ; [| apply joinable_scons] |].
+  + now apply IHpred1_2.
+  + now apply IHpred1_3.
+  + reflexivity.
+  + revert H0 H1. apply All2_weird_consequence. firstorder.
+- depelim H2. depelim H1. eapply joinable_beta.
+  + now apply IHpred1_1.
+  + now apply IHpred1_2.
+  + now apply IHpred1_3.
+  + revert H0 H2. apply All2_weird_consequence. firstorder.
+- apply joinable_lam ; auto.
+- apply joinable_prod ; auto.
+- depelim H1. depelim H. depelim H1.
+  specialize (IHpred1 (TLam x ty'0 body')). feed IHpred1. { now apply pred1_lam. }
+  destruct IHpred1 as (z & Hz1 & Hz2). depelim Hz1. depelim Hz2.
+  apply inj_right_sigma in H3. depelim H3.
+  symmetry. eapply joinable_beta.
+  + eexists ; eauto.
+  + eexists ; eauto.
+  + symmetry. auto.
+  + revert H4 H2. apply All2_weird_consequence. firstorder.
+- apply joinable_app ; auto. revert H0 H3. apply All2_weird_consequence. firstorder.
+Qed.
+
+(** [pred1] is confluent. This is a consequence of the diamond property. *)
 Lemma pred1_confluence {s} :
   diamond (refl_trans_clos (@pred1 s)) (refl_trans_clos (@pred1 s)).
-Proof. apply diamond_confluence, pred1_diamond. Qed.
+Proof. apply diamond_confluence. intros t u1 u2. apply pred1_diamond. Qed.
 
 (***********************************************************************)
-(** * Main result: confluence. *)
+(** * Main result: confluence of [red]. *)
 (***********************************************************************)
 
 (** Confluence for [red] is an immediate result of the confluence for [pred1]. *)
