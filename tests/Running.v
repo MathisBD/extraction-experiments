@@ -1,7 +1,5 @@
 From Stdlib Require Strings.PrimString.
-From Metaprog.Data Require Import Term.
-From Metaprog.Control Require Import Meta Command Effects.All.
-From Metaprog.Extraction Require Import All.
+From Metaprog Require Import Control.Command Extraction.All.
 
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.

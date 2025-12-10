@@ -1,5 +1,6 @@
-From Metaprog Require Import Prelude Control.Meta.
-From Metaprog.Control.Effects Require Import Print Fail Iter Rec Evar.
+From Metaprog Require Import Prelude.
+From Metaprog Require Export Control.Meta.
+From Metaprog.Control.Effects Require Export Print Fail Iter Rec Evar.
 
 (** This module defines the aggregate effect [commandE] used when running commands. *)
 

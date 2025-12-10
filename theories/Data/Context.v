@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Data.Term.
+From Metaprog Require Import Prelude.
+From Metaprog Require Export Data.Term.
 
 (** This module defines local contexts, which store the types of local variables in
     a given scope. *)

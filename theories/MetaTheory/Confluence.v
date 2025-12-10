@@ -1,5 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Data.Context
-  MetaTheory.Reduction MetaTheory.Substitution.
+From Metaprog Require Import Prelude.
+From Metaprog.MetaTheory Require Export Reduction.
 
 (** This module proves the confluence lemma for the reduction relation [red],
     using the standard parallel reduction technique. *)
@@ -136,6 +136,15 @@ intros H. induction H.
 - reflexivity.
 Qed.
 
+(** The reflexive closure of [pred1] is equal to [red]. *)
+Lemma red_is_pred {s} (t u : term s) :
+  red t u <-> refl_trans_clos pred1 t u.
+Proof.
+split ; revert t u ; apply refl_trans_clos_incl.
+- intros t u H. apply refl_trans_clos_one. now apply pred1_of_red1.
+- intros t u H. now apply red_of_pred1.
+Qed.
+
 (***********************************************************************)
 (** * Compatibility with renaming and substitution. *)
 (***********************************************************************)
@@ -207,12 +216,10 @@ Qed.
 (** * Diamond property for parallel reduction. *)
 (***********************************************************************)
 
-Lemma pred1_diamond {s} (t u1 u2 : term s) :
-  pred1 t u1 ->
-  pred1 t u2 ->
-  exists v, pred1 u1 v /\ pred1 u2 v.
+Lemma pred1_diamond {s} :
+  diamond (@pred1 s) (@pred1 s).
 Proof.
-intros H1 H2. depind H1.
+intros t u1 u2 H1 H2. depind H1.
 - depelim H2.
   + apply IHpred1_1 in H2_. destruct H2_ as (vty & Hvty & Hvty').
     apply IHpred1_2 in H2_0. destruct H2_0 as (vbody & Hvbody & Hvbody').
@@ -237,46 +244,21 @@ intros H1 H2. depind H1.
 - depelim H2. now eexists.
 Admitted.
 
+Lemma pred1_confluence {s} :
+  diamond (refl_trans_clos (@pred1 s)) (refl_trans_clos (@pred1 s)).
+Proof. apply diamond_confluence, pred1_diamond. Qed.
+
 (***********************************************************************)
 (** * Main result: confluence. *)
 (***********************************************************************)
 
-Lemma red_local_confluence {s} (t u1 u2 : term s) :
-  red1 t u1 ->
-  red1 t u2 ->
-  exists v, red u1 v /\ red u2 v.
-Proof.
-intros H1 H2. apply pred1_of_red1 in H1, H2.
-destruct (pred1_diamond t u1 u2 H1 H2) as (v & Hv1 & Hv2).
-exists v. now split ; apply red_of_pred1.
-Qed.
-
-Lemma red_confluence_aux {s} (t u1 u2 : term s) :
-  red t u1 ->
-  red1 t u2 ->
-  exists v, red1 u1 v /\ red u2 v.
-Proof.
-intros H1 H2. induction H1 in u2, H2 |- * using red_ind_step_end.
-- exists u2. now split.
-- destruct (IHred _ H2) as (v & Hv1 & Hv2).
-Admitted.
-(*
-
-t1 ------> u2
-|          |
-|          |
-v*         v*
-t2 ----->* v
-|
-|
-v
-t3
-
-*)
-
-
+(** Confluence for [red] is an immediate result of the confluence for [pred1]. *)
 Lemma red_confluence {s} (t u1 u2 : term s) :
   red t u1 ->
   red t u2 ->
   exists v, red u1 v /\ red u2 v.
-Proof. Admitted.
+Proof.
+intros H1 H2. rewrite red_is_pred in H1, H2.
+pose proof (H := pred1_confluence t u1 u2 H1 H2).
+destruct H as (v & Hv1 & Hv2). exists v. rewrite !red_is_pred. now split.
+Qed.

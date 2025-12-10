@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude Data.Term.
+From Metaprog Require Import Prelude.
 
 (** This module defines:
     - The meta-programming monad [meta] based on interaction trees.

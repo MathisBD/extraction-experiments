@@ -1,7 +1,7 @@
 From Stdlib Require Strings.PrimString.
 From Stdlib Require Import Relations Morphisms Setoid Program Bool Nat List Lia.
 From Equations Require Import Equations.
-From Metaprog Require Import Prelude Data.Term Data.Context Control.Meta Control.Effects.All.
+From Metaprog Require Import Prelude Data.Context Control.Effects.All.
 
 Import ListNotations.
 Import PrimString.PStringNotations.

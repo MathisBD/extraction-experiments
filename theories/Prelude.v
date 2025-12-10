@@ -23,7 +23,7 @@ Ltac feed H :=
   match type of H with
   | ?A -> ?B =>
     let HA := fresh "H" in
-    assert (HA : A) ; [| specialize (H HA)]
+    assert (HA : A) ; [| specialize (H HA) ; clear HA]
   end.
 
 Ltac feed2 H := feed H ; [| feed H].

@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Data.Term.
+From Metaprog Require Import Prelude.
+From Metaprog Require Export Data.Term.
 
 (** This module develops the equational theory of renamings, thinnings, and substitutions,
     i.e. sigma calculus. Note that we assume the functional extensionality axiom which

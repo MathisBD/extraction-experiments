@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Control.Meta.
+From Metaprog Require Import Prelude.
+From Metaprog Require Export Data.Term Control.Meta.
 
 (** [evar_entry] records the information pertaining to an evar: its type
     and optionally its definition. *)

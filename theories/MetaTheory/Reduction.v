@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Data.Context MetaTheory.Substitution.
+From Metaprog Require Import Prelude.
+From Metaprog.MetaTheory Require Export Relations Substitution.
 
 (** This module defines:
     - The one-step strong reduction relation [red1] on [term].
@@ -87,62 +88,18 @@ Qed.
 (***********************************************************************)
 
 (** Strong reduction relation, defined as the reflexive-transitive closure of [red1]. *)
-Inductive red {s} : term s -> term s -> Prop :=
-| red_of_red1 t1 t2 : red1 t1 t2 -> red t1 t2
-| red_refl t : red t t
-| red_trans t1 t2 t3 : red t1 t2 -> red t2 t3 -> red t1 t3.
+Definition red {s} : term s -> term s -> Prop :=
+  refl_trans_clos (@red1 s).
 
-Derive Signature for red.
-
-#[export] Instance red_Reflexive s : Reflexive (@red s).
-Proof. intros t. apply red_refl. Qed.
-
-#[export] Instance red_Transitive s : Transitive (@red s).
-Proof. intros t1 t2 t3. apply red_trans. Qed.
+Arguments red : simpl never.
 
 Lemma red_same {s} (t u : term s) :
   t = u -> red t u.
 Proof. intros ->. reflexivity. Qed.
 
-(** Alternate induction principle on [red] which makes some proofs easier. *)
-Lemma red_ind_step_start (P : forall s, term s -> term s -> Prop)
-  (Hrefl : forall s t, P s t t)
-  (Hstep : forall s t1 t2 t3, red1 t1 t2 -> red t2 t3 -> P s t2 t3 -> P s t1 t3) :
-  forall s t1 t2, red t1 t2 -> P s t1 t2.
-Proof.
-intros s t1 t2 H. depind H.
-- apply Hstep with t2.
-  + assumption.
-  + reflexivity.
-  + apply Hrefl.
-- apply Hrefl.
-- clear IHred1. revert t3 H0 IHred2. depind H ; intros t' H1 H2.
-  + eapply Hstep ; [eassumption | assumption | assumption].
-  + assumption.
-  + apply IHred1.
-    * etransitivity ; eauto.
-    * now apply IHred2.
-Qed.
-
-(** Alternate induction principle on [red] which makes some proofs easier. *)
-Lemma red_ind_step_end (P : forall s, term s -> term s -> Prop)
-  (Hrefl : forall s t, P s t t)
-  (Hstep : forall s t1 t2 t3, red t1 t2 -> P s t1 t2 -> red1 t2 t3 -> P s t1 t3) :
-  forall s t1 t2, red t1 t2 -> P s t1 t2.
-Proof.
-intros s t1 t2 H. depind H.
-- apply Hstep with (t2 := t1).
-  + reflexivity.
-  + apply Hrefl.
-  + assumption.
-- apply Hrefl.
-- clear IHred2. revert t1 H IHred1. depind H0 ; intros t' H1 H2.
-  + eapply Hstep ; [eassumption | assumption | assumption].
-  + assumption.
-  + apply IHred2.
-    * etransitivity ; eauto.
-    * now apply IHred1.
-Qed.
+Lemma red_of_red1 {s} (t u : term s) :
+  red1 t u -> red t u.
+Proof. apply refl_trans_clos_one. Qed.
 
 (***********************************************************************)
 (** * Congruence lemmas. *)
@@ -162,13 +119,11 @@ Section CongruenceLemmas.
   Proof.
   intros Hty Hbody. transitivity (TLam x ty body').
   - clear Hty. induction Hbody.
-    + apply red_of_red1. now constructor.
     + reflexivity.
-    + etransitivity ; eauto.
+    + rewrite IHHbody. now apply red_of_red1, red1_lam_r.
   - clear Hbody. induction Hty.
-    + apply red_of_red1. now constructor.
     + reflexivity.
-    + etransitivity ; eauto.
+    + rewrite IHHty. now apply red_of_red1, red1_lam_l.
   Qed.
 
   Lemma red_prod_congr x (a a' : term s) b b' :
@@ -178,13 +133,11 @@ Section CongruenceLemmas.
   Proof.
   intros Ha Hb. transitivity (TProd x a b').
   - clear Ha. induction Hb.
-    + apply red_of_red1. now constructor.
     + reflexivity.
-    + etransitivity ; eauto.
+    + rewrite IHHb. now apply red_of_red1, red1_prod_r.
   - clear Hb. induction Ha.
-    + apply red_of_red1. now constructor.
     + reflexivity.
-    + etransitivity ; eauto.
+    + rewrite IHHa. now apply red_of_red1, red1_prod_l.
   Qed.
 
   Lemma red_app_congr_aux (f : term s) l (args args' : list (term s)) :
@@ -195,9 +148,9 @@ Section CongruenceLemmas.
   - reflexivity.
   - transitivity (TApp f (l ++ y :: xs)).
     + clear IHAll2 H0. induction H.
-      * apply red_of_red1, red1_app_r. apply OnOne2_app_r, OnOne2_head. assumption.
       * reflexivity.
-      * etransitivity ; eauto.
+      * rewrite IHrefl_trans_clos. apply red_of_red1, red1_app_r.
+        now apply OnOne2_app_r, OnOne2_head.
     + specialize (IHAll2 f (l ++ [y])). rewrite <-!app_assoc in IHAll2.
       cbn in IHAll2. exact IHAll2.
   Qed.
@@ -209,9 +162,8 @@ Section CongruenceLemmas.
   Proof.
   intros Hf Hargs. transitivity (TApp f' args).
   - clear Hargs. induction Hf.
-    + apply red_of_red1. now constructor.
     + reflexivity.
-    + etransitivity ; eauto.
+    + rewrite IHHf. now apply red_of_red1, red1_app_l.
   - clear f Hf. apply red_app_congr_aux with (l := []). assumption.
   Qed.
 
@@ -228,18 +180,16 @@ Section InversionLemmas.
     red TType t -> t = TType.
   Proof.
   intros H. depind H.
-  - depelim H.
   - reflexivity.
-  - subst. specialize (IHred2 t3 eq_refl). now subst.
+  - subst. depelim H0.
   Qed.
 
   Lemma red_var_inv (i : index s) (t : term s) :
     red (TVar i) t -> t = TVar i.
   Proof.
   intros H. depind H.
-  - depelim H.
   - reflexivity.
-  - subst. specialize (IHred2 i t3 eq_refl). now subst.
+  - subst. depelim H0.
   Qed.
 
   Lemma red_lam_inv x (ty : term s) body t :
@@ -250,14 +200,12 @@ Section InversionLemmas.
       red body body'.
   Proof.
   intros Hred. depind Hred.
-  - depelim H.
-    + exists ty', body. split3 ; [reflexivity | now apply red_of_red1 | reflexivity].
-    + exists ty, body'. split3 ; [reflexivity | reflexivity | now apply red_of_red1].
   - exists ty, body. now split3.
-  - destruct IHHred1 as (ty' & body' & -> & Hty1 & Hbody1).
-    specialize (IHHred2 x ty' body' t3 eq_refl).
-    destruct IHHred2 as (ty'' & body'' & -> & Hty2 & Hbody2).
-    exists ty'', body''. split3 ; [reflexivity | etransitivity ; eauto ..].
+  - destruct IHHred as (ty' & body' & -> & Hty1 & Hbody1). depelim H.
+    + exists ty'0, body'. split3 ; [reflexivity | | assumption].
+      rewrite Hty1. now apply red_of_red1.
+    + exists ty', body'0. split3 ; [reflexivity | assumption |].
+      rewrite Hbody1. now apply red_of_red1.
   Qed.
 
   Lemma red_prod_inv x (a : term s) b t :
@@ -268,23 +216,20 @@ Section InversionLemmas.
       red b b'.
   Proof.
   intros Hred. depind Hred.
-  - depelim H.
-    + exists a', b. split3 ; [reflexivity | now apply red_of_red1 | reflexivity].
-    + exists a, b'. split3 ; [reflexivity | reflexivity | now apply red_of_red1].
   - exists a, b. now split3.
-  - destruct IHHred1 as (a' & b' & -> & Ha1 & Hb1).
-    specialize (IHHred2 x a' b' t3 eq_refl).
-    destruct IHHred2 as (a'' & b'' & -> & Ha2 & Hb2).
-    exists a'', b''. split3 ; [reflexivity | etransitivity ; eauto ..].
+  - destruct IHHred as (a' & b' & -> & Ha1 & Hb1). depelim H.
+    + exists a'0, b'. split3 ; [reflexivity | | assumption].
+      rewrite Ha1. now apply red_of_red1.
+    + exists a', b'0. split3 ; [reflexivity | assumption |].
+      rewrite Hb1. now apply red_of_red1.
   Qed.
 
   Lemma red_evar_inv ev (t : term s) :
     red (TEvar ev) t -> t = TEvar ev.
   Proof.
   intros H. depind H.
-  - depelim H.
   - reflexivity.
-  - subst. specialize (IHred2 ev t3 eq_refl). now subst.
+  - subst. depelim H0.
   Qed.
 
 End InversionLemmas.
@@ -319,9 +264,8 @@ Section SubstitutionLemma.
     red t t' -> red (rename ρ t) (rename ρ t').
   Proof.
   intros H. induction H.
-  - now apply red_of_red1, red1_rename.
   - reflexivity.
-  - etransitivity ; eauto.
+  - rewrite IHrefl_trans_clos. now apply red_of_red1, red1_rename.
   Qed.
 
   (** Substitution lemma for [red1]. *)
@@ -347,9 +291,8 @@ Section SubstitutionLemma.
     red t t' -> red (substitute σ t) (substitute σ t').
   Proof.
   intros H. induction H.
-  - now apply red_of_red1, red1_substitute.
   - reflexivity.
-  - etransitivity ; eauto.
+  - rewrite IHrefl_trans_clos. now apply red_of_red1, red1_substitute.
   Qed.
 
 End SubstitutionLemma.

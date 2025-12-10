@@ -1,5 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Data.Context.
-From Metaprog.MetaTheory Require Import Reduction Confluence.
+From Metaprog Require Import Prelude.
+From Metaprog.MetaTheory Require Export Confluence.
 
 (** This module defines the conversion relation [conv] on [term]
     and develops the equational theory of [conv]. *)
@@ -30,9 +30,8 @@ Lemma conv_of_red {s} (t u : term s) :
   red t u -> conv t u.
 Proof.
 intros H. induction H.
-- apply conv_of_red1. assumption.
 - reflexivity.
-- etransitivity ; eauto.
+- rewrite IHrefl_trans_clos. now apply conv_of_red1.
 Qed.
 
 (***********************************************************************)

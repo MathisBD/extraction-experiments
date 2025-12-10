@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Control.Meta.
+From Metaprog Require Import Prelude.
+From Metaprog Require Export Control.Meta.
 
 (** [iter_step A R] represents the result of a single iteration step
     with an accumulator of type [A] and a result of type [R]. *)

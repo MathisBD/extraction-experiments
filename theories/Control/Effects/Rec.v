@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude PluginLoader Control.Meta.
+From Metaprog Require Import Prelude PluginLoader.
+From Metaprog Require Export Control.Meta.
 
 (** Due to technical details related to the positivity condition, recursive calls
     are represented using a [key], which is implemented as a natural.
