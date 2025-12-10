@@ -1,7 +1,7 @@
 From Metaprog Require Import Prelude.
 From Metaprog.MetaTheory Require Export Reduction.
 
-(** This module proves the confluence lemma for the reduction relation [red],
+(** This module proves the confluence lemma for the reduction relation [red]
     using the standard parallel reduction technique. *)
 
 (***********************************************************************)

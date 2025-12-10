@@ -3,7 +3,7 @@ From Metaprog.MetaTheory Require Export Relations Substitution.
 
 (** This module defines:
     - The one-step strong reduction relation [red1] on [term].
-    - The reduction relation [red] on [term] and its basic properties. *)
+    - The strong reduction relation [red] on [term] and its basic properties. *)
 
 (***********************************************************************)
 (** * One-step reduction relation [red1]. *)
