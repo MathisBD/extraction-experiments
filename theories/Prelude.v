@@ -1,5 +1,6 @@
 From Stdlib Require Export Bool Nat List Lia PrimString Relations Morphisms.
 From Equations Require Export Equations.
+From Metaprog Require Export Axioms.
 
 Export PrimString.PStringNotations.
 Export List.ListNotations.
@@ -58,82 +59,97 @@ Notation "⟨ x , y ⟩" := (existT _ x y).
 Notation "⟨ x , y1 , y2 ⟩" := (existT2 _ _ x y1 y2).
 Notation "⟨ x , y1 , y2 , y3 ⟩" := (existT3 _ _ _ x y1 y2 y3).
 
-Section ListPredicates.
+Derive Signature for Forall Exists.
 
-  (** [OnOne2 P xs ys] means that the lists [xs] and [ys] are equal except at
-      exactly one position, and at these positions the elements are related by [P]. *)
-  Inductive OnOne2 {A} (P : A -> A -> Prop) : list A -> list A -> Prop :=
-  | OnOne2_head x x' xs : P x x' -> OnOne2 P (x :: xs) (x' :: xs)
-  | OnOne2_tail x xs xs' : OnOne2 P xs xs' -> OnOne2 P (x :: xs) (x :: xs').
+(** [OnOne2 P xs ys] means that the lists [xs] and [ys] are equal except at
+    exactly one position, and at these positions the elements are related by [P]. *)
+Inductive OnOne2 {A} (P : A -> A -> Prop) : list A -> list A -> Prop :=
+| OnOne2_head x x' xs : P x x' -> OnOne2 P (x :: xs) (x' :: xs)
+| OnOne2_tail x xs xs' : OnOne2 P xs xs' -> OnOne2 P (x :: xs) (x :: xs').
 
-  Lemma OnOne2_length {A} (P : A -> A -> Prop) xs ys :
-    OnOne2 P xs ys -> List.length xs = List.length ys.
-  Proof. intros H. induction H ; cbn ; lia. Qed.
+Derive Signature for OnOne2.
 
-  Lemma OnOne2_app_l {A} (P : A -> A -> Prop) xs xs' ys :
-    OnOne2 P xs xs' -> OnOne2 P (xs ++ ys) (xs' ++ ys).
-  Proof.
-  intros H. induction H ; cbn.
-  - now apply OnOne2_head.
-  - now apply OnOne2_tail.
-  Qed.
+Lemma OnOne2_length {A} (P : A -> A -> Prop) xs ys :
+  OnOne2 P xs ys -> List.length xs = List.length ys.
+Proof. intros H. induction H ; cbn ; lia. Qed.
 
-  Lemma OnOne2_app_r {A} (P : A -> A -> Prop) xs ys ys' :
-    OnOne2 P ys ys' -> OnOne2 P (xs ++ ys) (xs ++ ys').
-  Proof.
-  intros H. induction xs ; cbn.
-  - assumption.
-  - now apply OnOne2_tail.
-  Qed.
+Lemma OnOne2_app_l {A} (P : A -> A -> Prop) xs xs' ys :
+  OnOne2 P xs xs' -> OnOne2 P (xs ++ ys) (xs' ++ ys).
+Proof.
+intros H. induction H ; cbn.
+- now apply OnOne2_head.
+- now apply OnOne2_tail.
+Qed.
 
-  Lemma OnOne2_consequence {A} (P Q : A -> A -> Prop) xs ys :
-    (forall x y, P x y -> Q x y) ->
-    OnOne2 P xs ys ->
-    OnOne2 Q xs ys.
-  Proof.
-  intros H H'. induction H'.
-  - apply OnOne2_head. auto.
-  - now apply OnOne2_tail.
-  Qed.
+Lemma OnOne2_app_r {A} (P : A -> A -> Prop) xs ys ys' :
+  OnOne2 P ys ys' -> OnOne2 P (xs ++ ys) (xs ++ ys').
+Proof.
+intros H. induction xs ; cbn.
+- assumption.
+- now apply OnOne2_tail.
+Qed.
 
-  (** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
-      In particular [xs] and [ys] must have the same length. *)
-  Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=
-  | All2_nil : All2 P [] []
-  | All2_cons x xs y ys : P x y -> All2 P xs ys -> All2 P (x :: xs) (y :: ys).
+Lemma OnOne2_consequence {A} (P Q : A -> A -> Prop) xs ys :
+  (forall x y, P x y -> Q x y) ->
+  OnOne2 P xs ys ->
+  OnOne2 Q xs ys.
+Proof.
+intros H H'. induction H'.
+- apply OnOne2_head. auto.
+- now apply OnOne2_tail.
+Qed.
 
-  Lemma All2_length {A B} (P : A -> B -> Prop) xs ys :
-    All2 P xs ys -> List.length xs = List.length ys.
-  Proof. intros H ; induction H ; cbn ; lia. Qed.
+(** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
+    In particular [xs] and [ys] must have the same length. *)
+Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=
+| All2_nil : All2 P [] []
+| All2_cons x xs y ys : P x y -> All2 P xs ys -> All2 P (x :: xs) (y :: ys).
 
-  Lemma All2_app {A B} (P : A -> B -> Prop) xs xs' ys ys' :
-    All2 P xs xs' -> All2 P ys ys' -> All2 P (xs ++ ys) (xs' ++ ys').
-  Proof.
-  intros H1 H2. induction H1 ; cbn.
-  - assumption.
-  - now constructor.
-  Qed.
+Derive Signature for All2.
 
-  Lemma All2_consequence {A} (P Q : A -> A -> Prop) xs ys :
-    (forall x y, P x y -> Q x y) ->
-    All2 P xs ys ->
-    All2 Q xs ys.
-  Proof. intros H H'. induction H' ; constructor ; auto. Qed.
+Lemma All2_length {A B} (P : A -> B -> Prop) xs ys :
+  All2 P xs ys -> List.length xs = List.length ys.
+Proof. intros H ; induction H ; cbn ; lia. Qed.
 
-  Lemma All2_same {A} (P : A -> A -> Prop) xs :
-    Reflexive P -> All2 P xs xs.
-  Proof. intros HR. induction xs ; now constructor. Qed.
+Lemma All2_app {A B} (P : A -> B -> Prop) xs xs' ys ys' :
+  All2 P xs xs' -> All2 P ys ys' -> All2 P (xs ++ ys) (xs' ++ ys').
+Proof.
+intros H1 H2. induction H1 ; cbn.
+- assumption.
+- now constructor.
+Qed.
 
-  Lemma All2_of_OnOne2 {A} (P : A -> A -> Prop) xs ys :
-    Reflexive P -> OnOne2 P xs ys -> All2 P xs ys.
-  Proof.
-  intros HR H. induction H ; constructor.
-  - assumption.
-  - now apply All2_same.
-  - reflexivity.
-  - assumption.
-  Qed.
+Lemma All2_consequence {A} (P Q : A -> A -> Prop) xs ys :
+  (forall x y, P x y -> Q x y) ->
+  All2 P xs ys ->
+  All2 Q xs ys.
+Proof. intros H H'. induction H' ; constructor ; auto. Qed.
 
-End ListPredicates.
+Lemma All2_same {A} (P : A -> A -> Prop) xs :
+  Reflexive P -> All2 P xs xs.
+Proof. intros HR. induction xs ; now constructor. Qed.
 
-Derive Signature for Forall Exists OnOne2 All2.
+Lemma All2_of_OnOne2 {A} (P : A -> A -> Prop) xs ys :
+  Reflexive P -> OnOne2 P xs ys -> All2 P xs ys.
+Proof.
+intros HR H. induction H ; constructor.
+- assumption.
+- now apply All2_same.
+- reflexivity.
+- assumption.
+Qed.
+
+Lemma All2_map {A A' B B'} (P : A' -> B' -> Prop) (f : A -> A') (g : B -> B') xs ys :
+  All2 P (map f xs) (map g ys) <->
+  All2 (fun x y => P (f x) (g y)) xs ys.
+Proof.
+split ; intros H ; depind H.
+- destruct xs ; [| depelim H]. destruct ys ; [| depelim H0].
+  constructor.
+- destruct xs0 ; [depelim H1 |]. destruct ys0 ; [depelim H2 |].
+  cbn in H1, H2. depelim H1. depelim H2. constructor.
+  + assumption.
+  + apply IHAll2. reflexivity.
+- constructor.
+- now constructor.
+Qed.

@@ -139,21 +139,6 @@ Qed.
 (** * Substitution lemma for parallel reduction. *)
 (***********************************************************************)
 
-Lemma All2_map {A A' B B'} (P : A' -> B' -> Prop) (f : A -> A') (g : B -> B') xs ys :
-  All2 P (map f xs) (map g ys) <->
-  All2 (fun x y => P (f x) (g y)) xs ys.
-Proof.
-split ; intros H ; depind H.
-- destruct xs ; [| depelim H]. destruct ys ; [| depelim H0].
-  constructor.
-- destruct xs0 ; [depelim H1 |]. destruct ys0 ; [depelim H2 |].
-  cbn in H1, H2. depelim H1. depelim H2. constructor.
-  + assumption.
-  + apply IHAll2. reflexivity.
-- constructor.
-- now constructor.
-Qed.
-
 Lemma pred1_rename {s s'} (t t' : term s) (ρ : ren s s') :
   pred1 t t' -> pred1 (rename ρ t) (rename ρ t').
 Proof.
