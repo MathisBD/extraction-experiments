@@ -86,6 +86,16 @@ Section ListPredicates.
   - now apply OnOne2_tail.
   Qed.
 
+  Lemma OnOne2_consequence {A} (P Q : A -> A -> Prop) xs ys :
+    (forall x y, P x y -> Q x y) ->
+    OnOne2 P xs ys ->
+    OnOne2 Q xs ys.
+  Proof.
+  intros H H'. induction H'.
+  - apply OnOne2_head. auto.
+  - now apply OnOne2_tail.
+  Qed.
+
   (** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
       In particular [xs] and [ys] must have the same length. *)
   Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=
@@ -104,11 +114,17 @@ Section ListPredicates.
   - now constructor.
   Qed.
 
+  Lemma All2_consequence {A} (P Q : A -> A -> Prop) xs ys :
+    (forall x y, P x y -> Q x y) ->
+    All2 P xs ys ->
+    All2 Q xs ys.
+  Proof. intros H H'. induction H' ; constructor ; auto. Qed.
+
   Lemma All2_same {A} (P : A -> A -> Prop) xs :
     Reflexive P -> All2 P xs xs.
   Proof. intros HR. induction xs ; now constructor. Qed.
 
-  Lemma OnOne2_All2 {A} (P : A -> A -> Prop) xs ys :
+  Lemma All2_of_OnOne2 {A} (P : A -> A -> Prop) xs ys :
     Reflexive P -> OnOne2 P xs ys -> All2 P xs ys.
   Proof.
   intros HR H. induction H ; constructor.
@@ -119,3 +135,5 @@ Section ListPredicates.
   Qed.
 
 End ListPredicates.
+
+Derive Signature for Forall Exists OnOne2 All2.
