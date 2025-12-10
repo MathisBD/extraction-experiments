@@ -8,7 +8,8 @@ From Metaprog Require Import Prelude Data.Term.
     - [ren_ext i] and [subst_ext i] are the analogs of [fun_ext i] for renamings
       and substitutions.
     - [simpl_subst] repeatedly rewrites with lemmas which simplify renamings
-      and substitutions.
+      and substitutions. A version [simpl_subst in H] is also available to
+      simplify in hypothesis [H].
 *)
 
 (***********************************************************************)
@@ -59,6 +60,12 @@ Tactic Notation "subst_ext" ident(i) := apply subst_ext ; intros i.
     because [simpl_subst] can easily loop indefinitely if we aren't careful. *)
 Ltac simpl_subst :=
   repeat progress (rewrite_strat (bottomup (hints subst))).
+
+Ltac simpl_subst_in H :=
+  repeat progress (rewrite_strat (bottomup (hints subst)) in H).
+
+Tactic Notation "simpl_subst" "in" ident(H) :=
+  simpl_subst_in H.
 
 #[export] Hint Rewrite
   rename_equation_1

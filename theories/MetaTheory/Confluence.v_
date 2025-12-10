@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Data.Context MetaTheory.Reduction.
+From Metaprog Require Import Prelude Data.Term Data.Context
+  MetaTheory.Reduction MetaTheory.Substitution.
 
 (** This module proves the confluence lemma for the reduction relation [red],
     using the standard parallel reduction technique. *)
@@ -136,16 +137,20 @@ intros H. induction H.
 Qed.
 
 (***********************************************************************)
-(** * Substitution lemma for parallel reduction. *)
+(** * Compatibility with renaming and substitution. *)
 (***********************************************************************)
 
+(** Renaming lemma for [pred1]. *)
 Lemma pred1_rename {s s'} (t t' : term s) (ρ : ren s s') :
   pred1 t t' -> pred1 (rename ρ t) (rename ρ t').
 Proof.
-intros H. induction H in s', ρ |- * ; simp rename.
-- cbn. rewrite rename_substitute.
-
-admit.
+intros H. induction H in s', ρ |- * ; simpl_subst.
+- cbn.
+  assert (substitute (srcomp (scons x arg' sid) ρ) body' =
+          substitute (scons x (rename ρ arg') sid) (rename (rup x ρ) body')) as ->.
+  { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
+  eapply pred1_app_beta ; eauto.
+  rewrite All2_map. revert H3. apply All2_consequence. firstorder.
 - reflexivity.
 - reflexivity.
 - now apply pred1_lam.
@@ -154,30 +159,49 @@ admit.
   + apply IHpred1.
   + revert H1. rewrite All2_map. apply All2_consequence. firstorder.
 - reflexivity.
+Qed.
 
 (** Parallel reduction on substitutions is just pointwise parallel reduction. *)
 Definition pred1_subst {s s'} (σ σ' : subst s s') : Prop :=
   forall i, pred1 (sapply σ i) (sapply σ' i).
 
+#[export] Instance pred1_subst_Reflexive s s' : Reflexive (@pred1_subst s s').
+Proof. intros σ i. reflexivity. Qed.
+
+Lemma pred1_subst_scons {x s s'} t t' (σ σ' : subst s s') :
+  pred1 t t' -> pred1_subst σ σ' -> pred1_subst (scons x t σ) (scons x t' σ').
+Proof. intros Ht Hσ i. depelim i ; simpl_subst ; auto. Qed.
+
 Lemma pred1_subst_sup {x s s'} (σ σ' : subst s s') :
   pred1_subst σ σ' -> pred1_subst (sup x σ) (sup x σ').
 Proof.
-intros H i. depelim i ; cbn.
+intros H i. depelim i ; simpl_subst.
 - reflexivity.
-- simp scons_aux. cbn. simp
+- apply pred1_rename. apply H.
+Qed.
 
+(** Substitution lemma for [pred1]. *)
 Lemma pred1_substitute {s s'} (t t' : term s) (σ σ' : subst s s') :
   pred1 t t' ->
-  (forall i, pred1 (sapply σ i) (sapply σ' i)) ->
+  pred1_subst σ σ' ->
   pred1 (substitute σ t) (substitute σ' t').
 Proof.
-intros Ht Hσ. induction Ht in s', σ, σ', Hσ |- * ; simp substitute.
-- admit.
+intros Ht Hσ. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
+- cbn.
+  assert (substitute (scomp (scons x arg' sid) σ') body' =
+          substitute (scons x (substitute σ' arg') sid) (substitute (sup x σ') body')) as ->.
+  { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
+  eapply pred1_app_beta ; eauto.
+  + apply IHHt2. now apply pred1_subst_sup.
+  + rewrite All2_map. revert H0. apply All2_consequence. firstorder.
 - reflexivity.
-- apply pred1_lam.
-  + now apply IHHt1.
-  + apply IHHt2. intros i ; depelim i.
-    *
+- apply Hσ.
+- apply pred1_lam ; auto. apply IHHt2. now apply pred1_subst_sup.
+- apply pred1_prod ; auto. apply IHHt2. now apply pred1_subst_sup.
+- apply pred1_app ; auto. rewrite All2_map. revert H0.
+  apply All2_consequence. firstorder.
+- reflexivity.
+Qed.
 
 (***********************************************************************)
 (** * Diamond property for parallel reduction. *)
@@ -187,14 +211,76 @@ Lemma pred1_diamond {s} (t u1 u2 : term s) :
   pred1 t u1 ->
   pred1 t u2 ->
   exists v, pred1 u1 v /\ pred1 u2 v.
-Proof. Admitted.
+Proof.
+intros H1 H2. depind H1.
+- depelim H2.
+  + apply IHpred1_1 in H2_. destruct H2_ as (vty & Hvty & Hvty').
+    apply IHpred1_2 in H2_0. destruct H2_0 as (vbody & Hvbody & Hvbody').
+    apply IHpred1_3 in H2_1. destruct H2_1 as (varg & Hvarg & Hvarg').
+    assert (exists vargs, All2 pred1 args' vargs /\ All2 pred1 args'0 vargs) as (vargs & Hvargs & Hvargs').
+    { admit. }
+    exists (TApp (substitute (scons x varg sid) vbody) vargs). split.
+    * apply pred1_app ; [apply pred1_substitute |] ; try assumption.
+      now apply pred1_subst_scons.
+    * apply pred1_app ; [apply pred1_substitute |] ; try assumption.
+      now apply pred1_subst_scons.
+  + depelim H2.
+- depelim H2. now eexists.
+- depelim H2. now eexists.
+- depelim H2. apply IHpred1_1 in H2_. apply IHpred1_2 in H2_0.
+  destruct H2_ as (v & Hv1 & Hv2). destruct H2_0 as (u & Hu1 & Hu2).
+  exists (TLam x v u). split ; apply pred1_lam ; assumption.
+- depelim H2. apply IHpred1_1 in H2_. apply IHpred1_2 in H2_0.
+  destruct H2_ as (v & Hv1 & Hv2). destruct H2_0 as (u & Hu1 & Hu2).
+  exists (TProd x v u). split ; apply pred1_prod ; assumption.
+- admit.
+- depelim H2. now eexists.
+Admitted.
 
 (***********************************************************************)
 (** * Main result: confluence. *)
 (***********************************************************************)
 
+Lemma red_local_confluence {s} (t u1 u2 : term s) :
+  red1 t u1 ->
+  red1 t u2 ->
+  exists v, red u1 v /\ red u2 v.
+Proof.
+intros H1 H2. apply pred1_of_red1 in H1, H2.
+destruct (pred1_diamond t u1 u2 H1 H2) as (v & Hv1 & Hv2).
+exists v. now split ; apply red_of_pred1.
+Qed.
+
+
+Lemma red_confluence_aux {s} (t u1 u2 : term s) :
+  red t u1 ->
+  red1 t u2 ->
+  exists v, red1 u1 v /\ red u2 v.
+Proof.
+intros H1 H2. induction H1 in u2, H2 |- * using red_ind_step_end.
+- exists u2. now split.
+- destruct (IHred _ H2) as (v & Hv1 & Hv2).
+
+(*
+
+t1 ------> u2
+|          |
+|          |
+v*         v*
+t2 ----->* v
+|
+|
+v
+t3
+
+*)
+
+
 Lemma red_confluence {s} (t u1 u2 : term s) :
   red t u1 ->
   red t u2 ->
   exists v, red u1 v /\ red u2 v.
-Proof. Admitted.
+Proof.
+intros H1 H2. induction H1 in u2, H2 |- *.
+-
+Admitted.

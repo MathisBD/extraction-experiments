@@ -99,6 +99,15 @@ intros H H'. induction H'.
 - now apply OnOne2_tail.
 Qed.
 
+Lemma OnOne2_map {A A'} (P : A' -> A' -> Prop) (f : A -> A') xs ys :
+  OnOne2 (fun x y => P (f x) (f y)) xs ys ->
+  OnOne2 P (map f xs) (map f ys).
+Proof.
+intros H. depind H ; cbn.
+- now constructor.
+- now constructor.
+Qed.
+
 (** [All2 P xs ys] means that [P] holds on every element of [xs] and [ys].
     In particular [xs] and [ys] must have the same length. *)
 Inductive All2 {A B} (P : A -> B -> Prop) : list A -> list B -> Prop :=

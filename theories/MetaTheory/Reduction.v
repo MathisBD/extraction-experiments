@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude Data.Term Data.Context.
+From Metaprog Require Import Prelude Data.Term Data.Context MetaTheory.Substitution.
 
 (** This module defines:
     - The one-step strong reduction relation [red1] on [term].
@@ -99,6 +99,50 @@ Proof. intros t. apply red_refl. Qed.
 
 #[export] Instance red_Transitive s : Transitive (@red s).
 Proof. intros t1 t2 t3. apply red_trans. Qed.
+
+Lemma red_same {s} (t u : term s) :
+  t = u -> red t u.
+Proof. intros ->. reflexivity. Qed.
+
+(** Alternate induction principle on [red] which makes some proofs easier. *)
+Lemma red_ind_step_start (P : forall s, term s -> term s -> Prop)
+  (Hrefl : forall s t, P s t t)
+  (Hstep : forall s t1 t2 t3, red1 t1 t2 -> red t2 t3 -> P s t2 t3 -> P s t1 t3) :
+  forall s t1 t2, red t1 t2 -> P s t1 t2.
+Proof.
+intros s t1 t2 H. depind H.
+- apply Hstep with t2.
+  + assumption.
+  + reflexivity.
+  + apply Hrefl.
+- apply Hrefl.
+- clear IHred1. revert t3 H0 IHred2. depind H ; intros t' H1 H2.
+  + eapply Hstep ; [eassumption | assumption | assumption].
+  + assumption.
+  + apply IHred1.
+    * etransitivity ; eauto.
+    * now apply IHred2.
+Qed.
+
+(** Alternate induction principle on [red] which makes some proofs easier. *)
+Lemma red_ind_step_end (P : forall s, term s -> term s -> Prop)
+  (Hrefl : forall s t, P s t t)
+  (Hstep : forall s t1 t2 t3, red t1 t2 -> P s t1 t2 -> red1 t2 t3 -> P s t1 t3) :
+  forall s t1 t2, red t1 t2 -> P s t1 t2.
+Proof.
+intros s t1 t2 H. depind H.
+- apply Hstep with (t2 := t1).
+  + reflexivity.
+  + apply Hrefl.
+  + assumption.
+- apply Hrefl.
+- clear IHred2. revert t1 H IHred1. depind H0 ; intros t' H1 H2.
+  + eapply Hstep ; [eassumption | assumption | assumption].
+  + assumption.
+  + apply IHred2.
+    * etransitivity ; eauto.
+    * now apply IHred1.
+Qed.
 
 (***********************************************************************)
 (** * Congruence lemmas. *)
@@ -244,3 +288,62 @@ Section InversionLemmas.
   Qed.
 
 End InversionLemmas.
+
+(***********************************************************************)
+(** * Compatibility with renaming and substitution. *)
+(***********************************************************************)
+
+Section SubstitutionLemma.
+  Context {s s' : scope}.
+
+  (** Renaming lemma for [red1]. *)
+  Lemma red1_rename (t t' : term s) (ρ : ren s s') :
+    red1 t t' -> red1 (rename ρ t) (rename ρ t').
+  Proof.
+  intros H. induction H in s', ρ |- * ; simpl_subst.
+  - cbn.
+    assert (substitute (srcomp (scons x arg sid) ρ) body =
+            substitute (scons x (rename ρ arg) sid) (rename (rup x ρ) body)) as ->.
+    { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
+    apply red1_beta.
+  - now apply red1_lam_l.
+  - now apply red1_lam_r.
+  - now apply red1_prod_l.
+  - now apply red1_prod_r.
+  - now apply red1_app_l.
+  - apply red1_app_r, OnOne2_map. revert H. apply OnOne2_consequence. firstorder.
+  Qed.
+
+  (** Renaming lemma for [red]. *)
+  Lemma red_rename (t t' : term s) (ρ : ren s s') :
+    red t t' -> red (rename ρ t) (rename ρ t').
+  Proof.
+  intros H. induction H.
+  - now apply red_of_red1, red1_rename.
+  - reflexivity.
+  - etransitivity ; eauto.
+  Qed.
+
+  (** Substitution lemma for [red]. *)
+  Lemma red_substitute (t t' : term s) (σ : subst s s') :
+    red t t' -> red (substitute σ t) (substitute σ t').
+  Proof.
+  intros H. induction H.
+  - induction H in s', σ |- * ; simpl_subst.
+    + cbn. rewrite red_beta. apply red_app_congr.
+      * apply red_same. simpl_subst. f_equal. subst_ext i.
+        depelim i ; simpl_subst ; reflexivity.
+      * now apply All2_same.
+    + now apply red_lam_congr.
+    + now apply red_lam_congr.
+    + now apply red_prod_congr.
+    + now apply red_prod_congr.
+    + apply red_app_congr ; auto. now apply All2_same.
+    + apply red_app_congr ; [reflexivity|]. rewrite All2_map.
+      apply All2_of_OnOne2 ; [intros t ; reflexivity |].
+      revert H. apply OnOne2_consequence. firstorder.
+  - reflexivity.
+  - etransitivity ; eauto.
+  Qed.
+
+End SubstitutionLemma.
