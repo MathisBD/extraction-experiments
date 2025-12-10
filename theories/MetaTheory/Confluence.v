@@ -224,7 +224,7 @@ intros H1 H2. depind H1.
       now apply pred1_subst_scons.
     * apply pred1_app ; [apply pred1_substitute |] ; try assumption.
       now apply pred1_subst_scons.
-  + depelim H2.
+  + admit.
 - depelim H2. now eexists.
 - depelim H2. now eexists.
 - depelim H2. apply IHpred1_1 in H2_. apply IHpred1_2 in H2_0.
@@ -251,7 +251,6 @@ destruct (pred1_diamond t u1 u2 H1 H2) as (v & Hv1 & Hv2).
 exists v. now split ; apply red_of_pred1.
 Qed.
 
-
 Lemma red_confluence_aux {s} (t u1 u2 : term s) :
   red t u1 ->
   red1 t u2 ->
@@ -260,7 +259,7 @@ Proof.
 intros H1 H2. induction H1 in u2, H2 |- * using red_ind_step_end.
 - exists u2. now split.
 - destruct (IHred _ H2) as (v & Hv1 & Hv2).
-
+Admitted.
 (*
 
 t1 ------> u2
@@ -280,7 +279,4 @@ Lemma red_confluence {s} (t u1 u2 : term s) :
   red t u1 ->
   red t u2 ->
   exists v, red u1 v /\ red u2 v.
-Proof.
-intros H1 H2. induction H1 in u2, H2 |- *.
--
-Admitted.
+Proof. Admitted.

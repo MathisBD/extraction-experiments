@@ -20,6 +20,9 @@ Inductive tag : Prop :=
 
 Derive NoConfusion for tag.
 
+#[export] Instance tag_EqDec : EqDec tag.
+Proof. intros [] []. now left. Defined.
+
 (** [scope] is isomorphic to the set of natural numbers [nat], but additionally
     contains phantom tags.
 
@@ -31,6 +34,19 @@ Inductive scope : Set :=
 | SCons (s : scope) (x : tag).
 
 Derive NoConfusion for scope.
+
+#[export] Instance scope_EqDec : EqDec scope.
+Proof.
+intros s s'. depind s ; depelim s'.
+- now left.
+- right. intros H. depelim H.
+- right. intros H. depelim H.
+- destruct (IHs s') ; destruct (eq_dec x x0) ; subst.
+  + now left.
+  + right. intros H. depelim H. auto.
+  + right. intros H. depelim H. auto.
+  + right. intros H. depelim H. auto.
+Defined.
 
 (** [∅] is the empty scope: it contains no variables. *)
 Notation "∅" := SNil.

@@ -133,11 +133,8 @@ Section CongruenceLemmas.
 End CongruenceLemmas.
 
 (***********************************************************************)
-(** * Inversion lemmas. *)
+(** * Inversion lemmas (aka injectivity of construtors). *)
 (***********************************************************************)
-
-#[export] Instance tag_EqDec : EqDec tag.
-Proof. intros [] []. now left. Qed.
 
 Section InversionLemmas.
   Context {s : scope}.
@@ -160,11 +157,11 @@ Section InversionLemmas.
   Qed.
 
   Lemma conv_prod_inv x (a a' : term s) b b' :
-    conv (TLam x a b) (TLam x a' b') ->
+    conv (TProd x a b) (TProd x a' b') ->
     conv a a' /\ conv b b'.
   Proof.
   intros H. apply church_rosser in H. destruct H as (t & H1 & H2).
-  apply red_lam_inv in H1, H2.
+  apply red_prod_inv in H1, H2.
   destruct H1 as (a1' & b1' & -> & Ha1 & Hb1).
   destruct H2 as (a2' & b2' & Heq & Ha2 & Hb2).
   depelim Heq. apply inj_right_sigma in H. depelim H. split.

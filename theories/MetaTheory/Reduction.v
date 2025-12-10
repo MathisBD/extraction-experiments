@@ -324,24 +324,30 @@ Section SubstitutionLemma.
   - etransitivity ; eauto.
   Qed.
 
+  (** Substitution lemma for [red1]. *)
+  Lemma red1_substitute (t t' : term s) (σ : subst s s') :
+    red1 t t' -> red1 (substitute σ t) (substitute σ t').
+  Proof.
+  intros H. induction H in s', σ |- * ; simpl_subst.
+  - cbn.
+    assert (substitute (scomp (scons x arg sid) σ) body =
+            substitute (scons x (substitute σ arg) sid) (substitute (sup x σ) body)) as ->.
+    { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
+    apply red1_beta.
+  - now apply red1_lam_l.
+  - now apply red1_lam_r.
+  - now apply red1_prod_l.
+  - now apply red1_prod_r.
+  - now apply red1_app_l.
+  - apply red1_app_r, OnOne2_map. revert H. apply OnOne2_consequence. firstorder.
+  Qed.
+
   (** Substitution lemma for [red]. *)
   Lemma red_substitute (t t' : term s) (σ : subst s s') :
     red t t' -> red (substitute σ t) (substitute σ t').
   Proof.
   intros H. induction H.
-  - induction H in s', σ |- * ; simpl_subst.
-    + cbn. rewrite red_beta. apply red_app_congr.
-      * apply red_same. simpl_subst. f_equal. subst_ext i.
-        depelim i ; simpl_subst ; reflexivity.
-      * now apply All2_same.
-    + now apply red_lam_congr.
-    + now apply red_lam_congr.
-    + now apply red_prod_congr.
-    + now apply red_prod_congr.
-    + apply red_app_congr ; auto. now apply All2_same.
-    + apply red_app_congr ; [reflexivity|]. rewrite All2_map.
-      apply All2_of_OnOne2 ; [intros t ; reflexivity |].
-      revert H. apply OnOne2_consequence. firstorder.
+  - now apply red_of_red1, red1_substitute.
   - reflexivity.
   - etransitivity ; eauto.
   Qed.
