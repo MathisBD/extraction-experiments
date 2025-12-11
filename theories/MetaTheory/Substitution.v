@@ -208,6 +208,25 @@ Qed.
 #[export] Hint Rewrite @rename_rename : subst.
 
 (***********************************************************************)
+(** * Renamings and closed terms. *)
+(***********************************************************************)
+
+Lemma ren_closed {s} (ρ : ren ∅ s) :
+  ρ = wk_idx.
+Proof. ren_ext i. depelim i. Qed.
+
+Lemma rename_closed {s} (ρ : ren ∅ s) (t : term ∅) :
+  rename ρ t = wk t.
+Proof. rewrite (ren_closed ρ). reflexivity. Qed.
+
+Lemma rename_wk_closed {s s'} (ρ : ren s s') (t : term ∅) :
+  rename ρ (wk t) = wk t.
+Proof.
+unfold wk. simpl_subst. rewrite (ren_closed (rcomp wk_idx ρ)). reflexivity.
+Qed.
+#[export] Hint Rewrite @rename_wk_closed : subst.
+
+(***********************************************************************)
 (** * Lemmas about [sapply]. *)
 (***********************************************************************)
 
@@ -374,3 +393,72 @@ clear IHt. induction H ; cbn.
 - now rewrite H, IHForall.
 Qed.
 #[export] Hint Rewrite @substitute_substitute : subst.
+
+(***********************************************************************)
+(** * Lemmas about [sren]. *)
+(***********************************************************************)
+
+Lemma sapply_sren {s s'} (ρ : ren s s') i :
+  sapply (sren ρ) i = TVar (rapply ρ i).
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @sapply_sren : subst.
+
+Lemma sren_rid {s} :
+  sren (@rid s) = sid.
+Proof. subst_ext i. reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rid : subst.*)
+
+Lemma sren_rshift {s x} :
+  sren (@rshift s x) = sshift.
+Proof. subst_ext i. reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rshift : subst.*)
+
+Lemma sren_rcons {s s' x} i (ρ : ren s s') :
+  sren (rcons x i ρ) = scons x (TVar i) (sren ρ).
+Proof. subst_ext j. depelim j ; simpl_subst ; reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rcons : subst.*)
+
+Lemma sren_rcomp {s s' s''} (ρ1 : ren s s') (ρ2 : ren s' s'') :
+  sren (rcomp ρ1 ρ2) = scomp (sren ρ1) (sren ρ2).
+Proof. subst_ext i. reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rcomp : subst.*)
+
+Lemma sren_rup {x s s'} (ρ : ren s s') :
+  sren (rup x ρ) = sup x (sren ρ).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rup : subst.*)
+
+Lemma substitute_sren {s s'} (ρ : ren s s') t :
+  substitute (sren ρ) t = rename ρ t.
+Proof.
+induction t using term_ind' in s', ρ |- * ; simpl_subst.
+- reflexivity.
+- reflexivity.
+- rewrite <-sren_rup. now rewrite IHt1, IHt2.
+- rewrite <-sren_rup. now rewrite IHt1, IHt2.
+- rewrite IHt. f_equal. induction H ; cbn.
+  + reflexivity.
+  + now rewrite H, IHForall.
+- reflexivity.
+Qed.
+#[export] Hint Rewrite @substitute_sren : subst.
+
+(***********************************************************************)
+(** * Substitutions and closed terms. *)
+(***********************************************************************)
+
+Lemma subst_closed {s} (σ : subst ∅ s) :
+  σ = sren wk_idx.
+Proof. subst_ext i. depelim i. Qed.
+
+Lemma substitute_closed {s} (σ : subst ∅ s) (t : term ∅) :
+  substitute σ t = wk t.
+Proof. rewrite (subst_closed σ). simpl_subst. reflexivity. Qed.
+
+Lemma substitute_wk_closed {s s'} (σ : subst s s') (t : term ∅) :
+  substitute σ (wk t) = wk t.
+Proof.
+unfold wk. simpl_subst. rewrite (subst_closed (rscomp wk_idx σ)).
+simpl_subst. reflexivity.
+Qed.
+#[export] Hint Rewrite @substitute_wk_closed : subst.

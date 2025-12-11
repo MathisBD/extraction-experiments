@@ -8,26 +8,31 @@ From Metaprog.MetaTheory Require Export Confluence.
 (** * Conversion relation [conv]. *)
 (***********************************************************************)
 
+Reserved Notation "Γ |- t ≡ u"
+  (at level 50, no associativity, t at next level, u at next level).
+
 (** Conversion relation, defined as the smallest equivalence relation containing [red1]. *)
-Inductive conv {s} : term s -> term s -> Prop :=
-| conv_of_red1 t1 t2 : red1 t1 t2 -> conv t1 t2
-| conv_refl t : conv t t
-| conv_sym t1 t2 : conv t1 t2 -> conv t2 t1
-| conv_trans t1 t2 t3 : conv t1 t2 -> conv t2 t3 -> conv t1 t3.
+Inductive conv {s} Σ : term s -> term s -> Prop :=
+| conv_of_red1 t1 t2 : Σ |- t1 ~>₁ t2 -> Σ |- t1 ≡ t2
+| conv_refl t : Σ |- t ≡ t
+| conv_sym t1 t2 : Σ |- t1 ≡ t2 -> Σ |- t2 ≡ t1
+| conv_trans t1 t2 t3 : Σ |- t1 ≡ t2 -> Σ |- t2 ≡ t3 -> Σ |- t1 ≡ t3
+
+where "Σ |- t ≡ u" := (conv Σ t u).
 
 Derive Signature for conv.
 
-#[export] Instance conv_Reflexive s : Reflexive (@conv s).
+#[export] Instance conv_Reflexive s Σ : Reflexive (@conv s Σ).
 Proof. intros t. apply conv_refl. Qed.
 
-#[export] Instance conv_Symmetric s : Symmetric (@conv s).
+#[export] Instance conv_Symmetric s Σ : Symmetric (@conv s Σ).
 Proof. intros t1 t2. apply conv_sym. Qed.
 
-#[export] Instance conv_Transitive s : Transitive (@conv s).
+#[export] Instance conv_Transitive s Σ : Transitive (@conv s Σ).
 Proof. intros t. apply conv_trans. Qed.
 
-Lemma conv_of_red {s} (t u : term s) :
-  red t u -> conv t u.
+Lemma conv_of_red {s} Σ (t u : term s) :
+  Σ |- t ~> u -> Σ |- t ≡ u.
 Proof.
 intros H. induction H.
 - reflexivity.
@@ -40,15 +45,16 @@ Qed.
 
 (** The Church-Rosser theorem is a direct consequence of the confluence lemma.
     We use Church-Rosser to prove inversion lemmas for [conv]. *)
-Lemma church_rosser {s} (t1 t2 : term s) :
-  conv t1 t2 -> exists u, red t1 u /\ red t2 u.
+Lemma church_rosser {s} Σ (t1 t2 : term s) :
+  Σ |- t1 ≡ t2 ->
+  exists u, Σ |- t1 ~> u /\ Σ |- t2 ~> u.
 Proof.
 intros H. depind H.
 - exists t2. split ; [now apply red_of_red1 | reflexivity].
 - exists t. now split.
 - destruct IHconv as (u & H1 & H2). exists u. now split.
 - destruct IHconv1 as (u1 & H1 & H2). destruct IHconv2 as (u2 & H3 & H4).
-  destruct (red_confluence t2 u1 u2 H2 H3) as (u & H5 & H6).
+  destruct (red_confluence Σ t2 u1 u2 H2 H3) as (u & H5 & H6).
   exists u. split ; etransitivity ; eassumption.
 Qed.
 
@@ -57,16 +63,16 @@ Qed.
 (***********************************************************************)
 
 Section CongruenceLemmas.
-  Context {s : scope}.
+  Context {s : scope} (Σ : evar_map).
 
   Lemma conv_beta x (ty : term s) body arg args :
-    conv (TApp (TLam x ty body) (arg :: args)) (TApp (body[x := arg]) args).
+    Σ |- TApp (TLam x ty body) (arg :: args) ≡ TApp (body[x := arg]) args.
   Proof. apply conv_of_red1. constructor. Qed.
 
   Lemma conv_lam_congr x (ty ty' : term s) body body' :
-    conv ty ty' ->
-    conv body body' ->
-    conv (TLam x ty body) (TLam x ty' body').
+    Σ |- ty ≡ ty' ->
+    Σ |- body ≡ body' ->
+    Σ |- TLam x ty body ≡ TLam x ty' body'.
   Proof.
   intros Hty Hbody. transitivity (TLam x ty' body).
   - clear Hbody. induction Hty.
@@ -82,9 +88,9 @@ Section CongruenceLemmas.
   Qed.
 
   Lemma conv_prod_congr x (a a' : term s) b b' :
-    conv a a' ->
-    conv b b' ->
-    conv (TProd x a b) (TProd x a' b').
+    Σ |- a ≡ a' ->
+    Σ |- b ≡ b' ->
+    Σ |- TProd x a b ≡ TProd x a' b'.
   Proof.
   intros Ha Hb. transitivity (TProd x a' b).
   - clear Hb. induction Ha.
@@ -100,8 +106,8 @@ Section CongruenceLemmas.
   Qed.
 
   Lemma conv_app_congr_aux (f : term s) l (args args' : list (term s)) :
-    All2 conv args args' ->
-    conv (TApp f (l ++ args)) (TApp f (l ++ args')).
+    All2 (conv Σ) args args' ->
+    Σ |- TApp f (l ++ args) ≡ TApp f (l ++ args').
   Proof.
   intros H. revert f l. depind H ; intros f l.
   - reflexivity.
@@ -116,9 +122,9 @@ Section CongruenceLemmas.
   Qed.
 
   Lemma conv_app_congr (f f' : term s) args args' :
-    conv f f' ->
-    All2 conv args args' ->
-    conv (TApp f args) (TApp f' args').
+    Σ |- f ≡ f' ->
+    All2 (conv Σ) args args' ->
+    Σ |- TApp f args ≡ TApp f' args'.
   Proof.
   intros Hf Hargs. transitivity (TApp f' args).
   - clear Hargs. induction Hf.
@@ -136,11 +142,11 @@ End CongruenceLemmas.
 (***********************************************************************)
 
 Section InversionLemmas.
-  Context {s : scope}.
+  Context {s : scope} (Σ : evar_map).
 
   Lemma conv_lam_inv x (ty ty' : term s) body body' :
-    conv (TLam x ty body) (TLam x ty' body') ->
-    conv ty ty' /\ conv body body'.
+    Σ |- TLam x ty body ≡ TLam x ty' body' ->
+    Σ |- ty ≡ ty' /\ Σ |- body ≡ body'.
   Proof.
   intros H. apply church_rosser in H. destruct H as (t & H1 & H2).
   apply red_lam_inv in H1, H2.
@@ -156,8 +162,8 @@ Section InversionLemmas.
   Qed.
 
   Lemma conv_prod_inv x (a a' : term s) b b' :
-    conv (TProd x a b) (TProd x a' b') ->
-    conv a a' /\ conv b b'.
+    Σ |- TProd x a b ≡ TProd x a' b' ->
+    Σ |- a ≡ a' /\ Σ |- b ≡ b'.
   Proof.
   intros H. apply church_rosser in H. destruct H as (t & H1 & H2).
   apply red_prod_inv in H1, H2.

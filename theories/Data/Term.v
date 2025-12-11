@@ -333,6 +333,10 @@ substitute σ (TEvar e) := TEvar e.
 Definition scomp {s1 s2 s3} (σ1 : subst s1 s2) (σ2 : subst s2 s3) : subst s1 s3 :=
   Subst (fun i => substitute σ2 (sapply σ1 i)).
 
+(** [sren ρ] lifts a renaming [ρ] into an equivalent subtitution. *)
+Definition sren {s s'} (ρ : ren s s') : subst s s' :=
+  Subst (fun i => TVar (rapply ρ i)).
+
 (** [t[x := u]] substitutes variable [x] with [u] in [t].
     It assumes the scope of [t] is of the form [_ ▷ x]. *)
 Global Notation "t [ x := u ]" := (substitute (@scons _ _ x u sid) t) (at level 10, only parsing).
