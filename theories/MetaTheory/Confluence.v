@@ -60,6 +60,28 @@ Set Elimination Schemes.
 
 Derive Signature for pred1.
 
+#[export] Instance pred1_Reflexive s Σ :
+  Reflexive (@pred1 s Σ).
+Proof.
+intros t. induction t using term_ind' ; constructor ; try assumption.
+induction args ; constructor ; depelim H ; auto.
+Qed.
+
+(** Parallel reduction on substitutions is just pointwise parallel reduction. *)
+Definition pred1_subst {s s'} Σ (σ σ' : subst s s') : Prop :=
+  forall i, Σ |- sapply σ i >> sapply σ' i.
+
+Notation "Σ |- σ1 >>ₛ σ2" := (pred1_subst Σ σ1 σ2)
+  (at level 50, no associativity, σ1 at next level, σ2 at next level).
+
+#[export] Instance pred1_subst_Reflexive s s' Σ :
+  Reflexive (@pred1_subst s s' Σ).
+Proof. intros σ i. reflexivity. Qed.
+
+(***********************************************************************)
+(** * Induction principle on [red1]. *)
+(***********************************************************************)
+
 (** Induction principle for [pred1]. We can't use Rocq's default induction principle
     because [pred1] is nested over [All2]. *)
 Lemma pred1_ind (P : forall s, evar_map -> term s -> term s -> Prop)
@@ -107,24 +129,6 @@ fix IH 5. intros s Σ t t' Hred. destruct Hred.
 - apply Hevar.
 Qed.
 
-#[export] Instance pred1_Reflexive s Σ :
-  Reflexive (@pred1 s Σ).
-Proof.
-intros t. induction t using term_ind' ; constructor ; try assumption.
-induction args ; constructor ; depelim H ; auto.
-Qed.
-
-(** Parallel reduction on substitutions is just pointwise parallel reduction. *)
-Definition pred1_subst {s s'} Σ (σ σ' : subst s s') : Prop :=
-  forall i, Σ |- sapply σ i >> sapply σ' i.
-
-Notation "Σ |- σ1 >>ₛ σ2" := (pred1_subst Σ σ1 σ2)
-  (at level 50, no associativity, σ1 at next level, σ2 at next level).
-
-#[export] Instance pred1_subst_Reflexive s s' Σ :
-  Reflexive (@pred1_subst s s' Σ).
-Proof. intros σ i. reflexivity. Qed.
-
 (***********************************************************************)
 (** * Relating parallel reduction and standard reduction. *)
 (***********************************************************************)
@@ -132,12 +136,7 @@ Proof. intros σ i. reflexivity. Qed.
 (** [pred1] admits the beta rule. *)
 Lemma pred1_beta {s} Σ x (ty : term s) body arg args :
   Σ |- TApp (TLam x ty body) (arg :: args) >> TApp (body[x := arg]) args.
-Proof.
-apply pred1_app_beta.
-- reflexivity.
-- reflexivity.
-- now apply All2_same.
-Qed.
+Proof. now apply pred1_app_beta. Qed.
 
 (** One-step reduction is included in parallel reduction. *)
 Lemma pred1_of_red1 {s} Σ (t u : term s) :
@@ -150,9 +149,9 @@ intros H. induction H.
 - now apply pred1_lam.
 - now apply pred1_prod.
 - now apply pred1_prod.
-- apply pred1_app ; [assumption|]. now apply All2_same.
+- now apply pred1_app.
 - apply pred1_app ; [reflexivity|]. apply All2_of_OnOne2 ; [typeclasses eauto|].
-  revert H. apply OnOne2_consequence. easy.
+  revert H. apply OnOne2_consequence. firstorder.
 Qed.
 
 (** Parallel reduction is included in standard reduction. *)
@@ -186,10 +185,10 @@ Qed.
 (***********************************************************************)
 
 (** Renaming lemma for [pred1]. *)
-Lemma pred1_rename {s s'} Σ (t t' : term s) (ρ : ren s s') :
-  Σ |- t >> t' -> Σ |- rename ρ t >> rename ρ t'.
+#[export] Instance pred1_rename {s s'} Σ (ρ : ren s s') :
+  Proper (pred1 Σ ==> pred1 Σ) (rename ρ).
 Proof.
-intros H. induction H in s', ρ |- * ; simpl_subst.
+intros t t' H. induction H in s', ρ |- * ; simpl_subst.
 - cbn.
   assert (substitute (srcomp (scons x arg' sid) ρ) body' =
           substitute (scons x (rename ρ arg') sid) (rename (rup x ρ) body')) as ->.
@@ -207,28 +206,23 @@ intros H. induction H in s', ρ |- * ; simpl_subst.
 - reflexivity.
 Qed.
 
-Lemma pred1_scons {x s s'} Σ t t' (σ σ' : subst s s') :
-  Σ |- t >> t' ->
-  Σ |- σ >>ₛ σ' ->
-  Σ |- scons x t σ >>ₛ scons x t' σ'.
-Proof. intros Ht Hσ i. depelim i ; simpl_subst ; auto. Qed.
+#[export] Instance pred1_scons {x s s'} Σ :
+  Proper (pred1 Σ ==> pred1_subst Σ ==> pred1_subst Σ) (@scons s s' x).
+Proof. intros t t' Ht σ σ' Hσ i. depelim i ; simpl_subst ; auto. Qed.
 
-Lemma pred1_sup {x s s'} Σ (σ σ' : subst s s') :
-  Σ |- σ >>ₛ σ' ->
-  Σ |- sup x σ >>ₛ sup x σ'.
+#[export] Instance pred1_sup {x s s'} Σ :
+  Proper (pred1_subst Σ ==> pred1_subst Σ) (@sup s s' x).
 Proof.
-intros H i. depelim i ; simpl_subst.
+intros σ σ' H i. depelim i ; simpl_subst.
 - reflexivity.
 - apply pred1_rename. apply H.
 Qed.
 
 (** Substitution lemma for [pred1]. *)
-Lemma pred1_substitute {s s'} Σ (t t' : term s) (σ σ' : subst s s') :
-  Σ |- t >> t' ->
-  Σ |- σ >>ₛ σ' ->
-  Σ |- substitute σ t >> substitute σ' t'.
+#[export] Instance pred1_substitute {s s'} Σ :
+  Proper (pred1_subst Σ ==> pred1 Σ ==> pred1 Σ) (@substitute s s').
 Proof.
-intros Ht Hσ. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
+intros σ σ' Hσ t t' Ht. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
 - cbn.
   assert (substitute (scomp (scons x arg' sid) σ') body' =
           substitute (scons x (substitute σ' arg') sid) (substitute (sup x σ') body')) as ->.
@@ -340,10 +334,7 @@ intros (body & Hbody1 & Hbody2) (arg & Harg1 & Harg2) Hargs.
 apply joinable_list in Hargs. destruct Hargs as (args & Hargs1 & Hargs2).
 exists (TApp (body[x := arg]) args). split.
 - apply pred1_app.
-  + apply pred1_substitute ; [| apply pred1_scons].
-    * assumption.
-    * assumption.
-    * reflexivity.
+  + repeat f_equiv ; assumption.
   + assumption.
 - now eapply pred1_app_beta.
 Qed.

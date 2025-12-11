@@ -106,8 +106,7 @@ Inductive term (s : scope) : Type :=
     If [b] does not depend on [x] the product is non-dependent: [a -> b]. *)
 | TProd (x : tag) (a : term s) (b : term (s ▷ x)) : term s
 (** [TApp f args] represents the application of function [f] to the
-    list of arguments [args]. Functions are expected to maintain the invariant
-    that [args] is non-empty and that [f] is not itself of the form [TApp _ _]. *)
+    list of arguments [args]. *)
 | TApp (f : term s) (args : list (term s)) : term s
 (** [TEvar e] represents an existential variable (evar) used for unification.
     Information pertaining to evars is stored in the evar-map. *)
@@ -128,7 +127,7 @@ term_size TType := 0 ;
 term_size (TVar _) := 0 ;
 term_size (TLam x ty body) := term_size ty + term_size body + 1 ;
 term_size (TProd x a b) := term_size a + term_size b + 1 ;
-term_size (TApp f args) := term_size f + sum (List.map term_size args) + 1 ;
+term_size (TApp f args) := term_size f + sum (map term_size args) + 1 ;
 term_size (TEvar _) := 0.
 
 (** Custom induction principle on terms. We can't use the induction principle
@@ -152,6 +151,10 @@ fix IH 2. intros s t. destruct t.
   + constructor ; [apply IH | apply IHargs].
 - apply Hevar.
 Qed.
+
+(*Equations apps {s} : term s -> list (term s) -> term s :=
+apps (TApp f args1) args2 := TApp f (args1 ++ args2) ;
+apps f args := TApp f args.*)
 
 (***********************************************************************)
 (** * Renamings. *)
@@ -339,7 +342,8 @@ Definition sren {s s'} (ρ : ren s s') : subst s s' :=
 
 (** [t[x := u]] substitutes variable [x] with [u] in [t].
     It assumes the scope of [t] is of the form [_ ▷ x]. *)
-Global Notation "t [ x := u ]" := (substitute (@scons _ _ x u sid) t) (at level 10, only parsing).
+Global Notation "t [ x := u ]" := (substitute (@scons _ _ x u sid) t)
+  (at level 10).
 
 (***********************************************************************)
 (** * Smart constructors. *)

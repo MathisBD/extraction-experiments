@@ -39,6 +39,14 @@ intros H. induction H.
 - rewrite IHrefl_trans_clos. now apply conv_of_red1.
 Qed.
 
+#[export] Instance subrelation_red_conv s Σ :
+  subrelation (@red s Σ) (@conv s Σ).
+Proof. intros t u H. now apply conv_of_red. Qed.
+
+#[export] Instance subrelation_red_conv_flip s Σ :
+  subrelation (@red s Σ) (Basics.flip (@conv s Σ)).
+Proof. intros t u H. unfold Basics.flip. symmetry. now apply conv_of_red. Qed.
+
 (***********************************************************************)
 (** * Church-Rosser theorem. *)
 (***********************************************************************)
@@ -46,16 +54,18 @@ Qed.
 (** The Church-Rosser theorem is a direct consequence of the confluence lemma.
     We use Church-Rosser to prove inversion lemmas for [conv]. *)
 Lemma church_rosser {s} Σ (t1 t2 : term s) :
-  Σ |- t1 ≡ t2 ->
+  Σ |- t1 ≡ t2 <->
   exists u, Σ |- t1 ~> u /\ Σ |- t2 ~> u.
 Proof.
-intros H. depind H.
-- exists t2. split ; [now apply red_of_red1 | reflexivity].
-- exists t. now split.
-- destruct IHconv as (u & H1 & H2). exists u. now split.
-- destruct IHconv1 as (u1 & H1 & H2). destruct IHconv2 as (u2 & H3 & H4).
-  destruct (red_confluence Σ t2 u1 u2 H2 H3) as (u & H5 & H6).
-  exists u. split ; etransitivity ; eassumption.
+split ; intros H.
+- depind H.
+  + exists t2. split ; [now apply red_of_red1 | reflexivity].
+  + exists t. now split.
+  + destruct IHconv as (u & H1 & H2). exists u. now split.
+  + destruct IHconv1 as (u1 & H1 & H2). destruct IHconv2 as (u2 & H3 & H4).
+    destruct (red_confluence Σ t2 u1 u2 H2 H3) as (u & H5 & H6).
+    exists u. split ; etransitivity ; eassumption.
+- destruct H as (u & H1 & H2). now rewrite H1, H2.
 Qed.
 
 (***********************************************************************)
@@ -67,14 +77,12 @@ Section CongruenceLemmas.
 
   Lemma conv_beta x (ty : term s) body arg args :
     Σ |- TApp (TLam x ty body) (arg :: args) ≡ TApp (body[x := arg]) args.
-  Proof. apply conv_of_red1. constructor. Qed.
+  Proof. now rewrite red_beta. Qed.
 
-  Lemma conv_lam_congr x (ty ty' : term s) body body' :
-    Σ |- ty ≡ ty' ->
-    Σ |- body ≡ body' ->
-    Σ |- TLam x ty body ≡ TLam x ty' body'.
+  #[export] Instance conv_lam_congr x :
+    Proper (conv Σ ==> conv Σ ==> conv Σ) (@TLam s x).
   Proof.
-  intros Hty Hbody. transitivity (TLam x ty' body).
+  intros ty ty' Hty body body' Hbody. transitivity (TLam x ty' body).
   - clear Hbody. induction Hty.
     + apply conv_of_red1. now constructor.
     + reflexivity.
@@ -87,12 +95,10 @@ Section CongruenceLemmas.
     + etransitivity ; eauto.
   Qed.
 
-  Lemma conv_prod_congr x (a a' : term s) b b' :
-    Σ |- a ≡ a' ->
-    Σ |- b ≡ b' ->
-    Σ |- TProd x a b ≡ TProd x a' b'.
+  #[export] Instance conv_prod_congr x :
+    Proper (conv Σ ==> conv Σ ==> conv Σ) (@TProd s x).
   Proof.
-  intros Ha Hb. transitivity (TProd x a' b).
+  intros a a' Ha b b' Hb. transitivity (TProd x a' b).
   - clear Hb. induction Ha.
     + apply conv_of_red1. now constructor.
     + reflexivity.
@@ -121,18 +127,30 @@ Section CongruenceLemmas.
       cbn in IHAll2. exact IHAll2.
   Qed.
 
-  Lemma conv_app_congr (f f' : term s) args args' :
-    Σ |- f ≡ f' ->
-    All2 (conv Σ) args args' ->
-    Σ |- TApp f args ≡ TApp f' args'.
+  #[export] Instance conv_app_congr :
+    Proper (conv Σ ==> All2 (conv Σ) ==> conv Σ) (@TApp s).
   Proof.
-  intros Hf Hargs. transitivity (TApp f' args).
+  intros f f' Hf args arg' Hargs. transitivity (TApp f' args).
   - clear Hargs. induction Hf.
     + apply conv_of_red1. now constructor.
     + reflexivity.
     + now symmetry.
     + etransitivity ; eauto.
   - apply conv_app_congr_aux with (l := []). assumption.
+  Qed.
+
+  #[export] Instance conv_rename {s'} (ρ : ren s s') :
+    Proper (conv Σ ==> conv Σ) (rename ρ).
+  Proof.
+  intros t t' H. rewrite church_rosser in H. destruct H as (u & H1 & H2).
+  now rewrite H1, H2.
+  Qed.
+
+  #[export] Instance conv_substitute {s'} (σ : subst s s') :
+    Proper (conv Σ ==> conv Σ) (substitute σ).
+  Proof.
+  intros t t' H. rewrite church_rosser in H. destruct H as (u & H1 & H2).
+  now rewrite H1, H2.
   Qed.
 
 End CongruenceLemmas.

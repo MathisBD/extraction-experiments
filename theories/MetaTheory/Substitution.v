@@ -86,19 +86,45 @@ Tactic Notation "simpl_subst" "in" ident(H) :=
   substitute_equation_6
   : subst.
 
-Lemma apply_id {A} (a : A) :
-  id a = a.
+Lemma map_nil {A B} (f : A -> B) :
+  map f [] = [].
 Proof. reflexivity. Qed.
-#[export] Hint Rewrite @apply_id : subst.
+#[export] Hint Rewrite @map_nil : subst.
 
-Lemma map_id {A} (xs : list A) :
-  map id xs = xs.
+#[export] Hint Rewrite app_nil_l : subst.
+#[export] Hint Rewrite app_nil_r : subst.
+
+(***********************************************************************)
+(** * Lemmas about [apps]. *)
+(***********************************************************************)
+
+(*Lemma apps_tapp {s} (f : term s) args args' :
+  apps (TApp f args) args' = TApp f (args ++ args').
+Proof. simp apps. reflexivity. Qed.
+#[export] Hint Rewrite @apps_tapp : subst.
+
+Lemma apps_apps {s} (f : term s) args args' :
+  apps (apps f args) args' = apps f (args ++ args').
 Proof.
-induction xs ; cbn.
-- reflexivity.
-- unfold id at 1. rewrite IHxs. reflexivity.
+destruct f ; simp apps ; try reflexivity. now rewrite app_assoc.
 Qed.
-#[export] Hint Rewrite @map_id : subst.
+#[export] Hint Rewrite @apps_apps : subst.
+
+Lemma rename_apps {s s'} (ρ : ren s s') f args :
+  rename ρ (apps f args) = apps (rename ρ f) (map (rename ρ) args).
+Proof.
+destruct f ; cbn ; simp apps ; simpl_subst ; auto.
+f_equal. rewrite map_app. reflexivity.
+Qed.
+#[export] Hint Rewrite @rename_apps : subst.
+
+Lemma substitute_apps {s s'} (σ : subst s s') f args :
+  substitute σ (apps f args) = apps (substitute σ f) (map (substitute σ) args).
+Proof.
+destruct f ; cbn ; simp apps ; simpl_subst ; auto.
+f_equal. rewrite map_app. reflexivity.
+Qed.
+#[export] Hint Rewrite @substitute_apps : subst.*)
 
 (***********************************************************************)
 (** * Lemmas about [rapply]. *)
@@ -207,6 +233,21 @@ induction t in s', s'', ρ1, ρ2 |- * using term_ind' ; simpl_subst ; f_equal.
 Qed.
 #[export] Hint Rewrite @rename_rename : subst.
 
+Lemma rcomp_assoc {s s' s'' s'''} (ρ1 : ren s s') (ρ2 : ren s' s'') (ρ3 : ren s'' s''') :
+  rcomp (rcomp ρ1 ρ2) ρ3 = rcomp ρ1 (rcomp ρ2 ρ3).
+Proof. ren_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @rcomp_assoc : subst.
+
+Lemma rcomp_rcons_l {x s s' s''} i (ρ1 : ren s s') (ρ2 : ren s' s'') :
+  rcomp (rcons x i ρ1) ρ2 = rcons x (rapply ρ2 i) (rcomp ρ1 ρ2).
+Proof. ren_ext j. depelim j ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @rcomp_rcons_l : subst.
+
+Lemma rcomp_rup_l {x s s' s''} (ρ1 : ren s s') (ρ2 : ren (s' ▷ x) s'') :
+  rcomp (rup x ρ1) ρ2 = rcons x (rapply ρ2 I0) (rcomp (rcomp ρ1 rshift) ρ2).
+Proof. ren_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @rcomp_rup_l : subst.
+
 (***********************************************************************)
 (** * Renamings and closed terms. *)
 (***********************************************************************)
@@ -296,7 +337,7 @@ induction t using term_ind' in s', s'', σ, ρ |- * ; simpl_subst.
 - rewrite sup_srcomp. f_equal ; auto.
 - rewrite sup_srcomp. f_equal ; auto.
 - f_equal ; auto. clear IHt. induction H ; cbn.
-  + constructor.
+  + reflexivity.
   + rewrite H, IHForall. reflexivity.
 - reflexivity.
 Qed.
@@ -306,6 +347,11 @@ Lemma srcomp_rid {s s'} (σ : subst s s') :
   srcomp σ rid = σ.
 Proof. subst_ext i. simpl_subst. reflexivity. Qed.
 #[export] Hint Rewrite @srcomp_rid : subst.
+
+Lemma srcomp_assoc {s s' s'' s'''} (σ1 : subst s s') (σ2 : subst s' s'') (ρ3 : ren s'' s''') :
+  srcomp (scomp σ1 σ2) ρ3 = scomp σ1 (srcomp σ2 ρ3).
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @srcomp_assoc : subst.
 
 (***********************************************************************)
 (** * Lemmas about [rscomp]. *)
@@ -350,6 +396,11 @@ induction t using term_ind' in s', s'', σ, ρ |- * ; simpl_subst.
 Qed.
 #[export] Hint Rewrite @substitute_rename : subst.
 
+Lemma rscomp_assoc {s s' s'' s'''} (ρ1 : ren s s') (σ2 : subst s' s'') (σ3 : subst s'' s''') :
+  scomp (rscomp ρ1 σ2) σ3 = rscomp ρ1 (scomp σ2 σ3).
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @rscomp_assoc : subst.
+
 (***********************************************************************)
 (** * Lemmas about [scomp]. *)
 (***********************************************************************)
@@ -393,6 +444,21 @@ clear IHt. induction H ; cbn.
 - now rewrite H, IHForall.
 Qed.
 #[export] Hint Rewrite @substitute_substitute : subst.
+
+Lemma scomp_assoc {s s' s'' s'''} (σ1 : subst s s') (σ2 : subst s' s'') (σ3 : subst s'' s''') :
+  scomp (scomp σ1 σ2) σ3 = scomp σ1 (scomp σ2 σ3).
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @scomp_assoc : subst.
+
+Lemma scomp_scons_l {x s s' s''} t (σ1 : subst s s') (σ2 : subst s' s'') :
+  scomp (scons x t σ1) σ2 = scons x (substitute σ2 t) (scomp σ1 σ2).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @scomp_scons_l : subst.
+
+Lemma scomp_sup_l {x s s' s''} (σ1 : subst s s') (σ2 : subst (s' ▷ x) s'') :
+  scomp (sup x σ1) σ2 = scons x (sapply σ2 I0) (scomp (scomp σ1 sshift) σ2).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @scomp_sup_l : subst.
 
 (***********************************************************************)
 (** * Lemmas about [sren]. *)
@@ -443,6 +509,11 @@ induction t using term_ind' in s', ρ |- * ; simpl_subst.
 Qed.
 #[export] Hint Rewrite @substitute_sren : subst.
 
+Lemma substitute_sshift {s x} t :
+  substitute (@sshift s x) t = rename rshift t.
+Proof. rewrite <-substitute_sren. reflexivity. Qed.
+#[export] Hint Rewrite @substitute_sshift : subst.
+
 (***********************************************************************)
 (** * Substitutions and closed terms. *)
 (***********************************************************************)
@@ -462,3 +533,5 @@ unfold wk. simpl_subst. rewrite (subst_closed (rscomp wk_idx σ)).
 simpl_subst. reflexivity.
 Qed.
 #[export] Hint Rewrite @substitute_wk_closed : subst.
+
+(** TODO: srcomp and rscomp when the left-hand side is [cons] or [up]. *)
