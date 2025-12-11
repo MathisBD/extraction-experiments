@@ -1,12 +1,5 @@
 From Metaprog Require Import Prelude.
-From Metaprog Require Export Data.Term Control.Meta.
-
-(** [evar_entry] records the information pertaining to an evar: its type
-    and optionally its definition. *)
-Record evar_entry := {
-  evar_type : term ∅ ;
-  evar_def : option (term ∅)
-}.
+From Metaprog Require Export Data.Evars Control.Meta.
 
 (** The effect [evarE] provides access to the evar-map, which stores information
     about evars. *)
