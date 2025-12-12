@@ -1,23 +1,14 @@
 From Metaprog Require Import Prelude.
-From Metaprog Require Import Data.Context MetaTheory.Conversion.
+From Metaprog Require Export Data.Context MetaTheory.Conversion.
 
-(** This module defines the typing relation on terms. *)
+(** This module defines the typing relation on terms and its basic
+    properties, notably:
+    - Compatibility with renaming and substitution.
+    - Inversion lemmas.
 
-(***********************************************************************)
-(** * Basic definitions. *)
-(***********************************************************************)
-
-(*Definition is_TApp {s} (t : term s) : bool :=
-  match t with
-  | TApp _ _ => true
-  | _ => false
-  end.
-
-Lemma is_TApp_rename {s s'} (ρ : ren s s') t :
-  is_TApp (rename ρ t) = is_TApp t.
-Proof.
-induction t using term_ind' in s', ρ |- * ; simpl_subst ; cbn ; auto.
-Qed.*)
+    We also define a notion of typing for various data-types such as
+    contexts, evar-maps, renamings, and substitutions.
+*)
 
 (***********************************************************************)
 (** * Lifting a property on a spine of arguments. *)
@@ -96,11 +87,9 @@ Unset Elimination Schemes.
 Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> Prop :=
 
 | typing_type :
-    (*typing_context Σ Γ ->*)
     Σ ;; Γ ⊢ TType : TType
 
 | typing_var i ty :
-    (*typing_context Σ Γ ->*)
     lookup_context i Γ = ty ->
     Σ ;; Γ ⊢ TVar i : ty
 
@@ -116,13 +105,10 @@ Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> 
 
 | typing_app f f_ty args T :
     Σ ;; Γ ⊢ f : f_ty ->
-    (*is_TApp f = false ->*)
-    (*args <> [] ->*)
     All_spine (@typing) Σ Γ f_ty args T ->
     Σ ;; Γ ⊢ TApp f args : T
 
 | typing_evar ev entry :
-    (*typing_context Σ Γ ->*)
     Σ ev = Some entry ->
     Σ ;; Γ ⊢ TEvar ev : wk entry.(evar_type)
 
@@ -132,8 +118,7 @@ Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> 
     Σ ;; Γ ⊢ B : TType ->
     Σ ;; Γ ⊢ t : B
 
-where "Σ ;; Γ ⊢ t : T" := (typing Σ Γ t T)
-  (*and "'typing_context' Σ Γ" := (All_context (fun _ Γ' t => Σ ;; Γ' ⊢ t : TType) Γ)*).
+where "Σ ;; Γ ⊢ t : T" := (typing Σ Γ t T).
 
 Set Elimination Schemes.
 
@@ -496,7 +481,7 @@ eapply typing_substitute ; eauto.
 Qed.
 
 (***********************************************************************)
-(** * Properties of typing. *)
+(** * Properties of context typing. *)
 (***********************************************************************)
 
 Lemma typing_lookup_context {s} Σ (Γ : context ∅ s) i :
@@ -512,28 +497,17 @@ intros H. induction H.
     eapply typing_rename ; eauto. apply typing_rshift.
 Qed.
 
+(***********************************************************************)
+(** * Properties of evar-map typing. *)
+(***********************************************************************)
+
 Lemma typing_evar_type Σ entry :
   typing_evar_entry Σ entry ->
   Σ ;; CNil ⊢ entry.(evar_type) : TType.
 Proof. intros H. destruct H ; cbn ; assumption. Qed.
 
-(** Beta reduction preserves typing. *)
-Lemma typing_beta {s} Σ Γ x ty body arg args (T : term s) :
-  Σ ;; Γ ⊢ TApp (TLam x ty body) (arg :: args) : T ->
-  Σ ;; Γ ⊢ TApp (body[x := arg]) args : T.
-Proof.
-intros H. apply typing_app_inv in H. destruct H as (f_ty & H1 & H2).
-apply typing_lam_inv in H1. destruct H1 as (body_ty & H1 & Hty & Hbody).
-depelim H2. assert (x0 = x) as ->. { destruct x0 ; destruct x ; reflexivity. }
-rewrite H1 in H0. clear f_ty H1. apply conv_prod_inv in H0. destruct H0 as (H4 & H5).
-eapply typing_app with (body_ty[x := arg]).
-- eapply typing_substitute ; eauto. apply typing_scons ; simpl_subst.
-  + apply typing_conv_type with a ; auto. now symmetry.
-  + apply typing_sid.
-- rewrite H5. assumption.
-Qed.
-
-Lemma typing_evar_expand_helper {s} Σ Γ ev (T : term s) :
+(** This lemma is be subsumed by the more general lemma [typing_type_ok]. *)
+Lemma typing_evar_type_ok {s} Σ Γ ev (T : term s) :
   typing_evar_map Σ ->
   Σ ;; Γ ⊢ TEvar ev : T ->
   Σ ;; Γ ⊢ T : TType.
@@ -543,87 +517,4 @@ intros HΣ H. depind H.
   + apply typing_evar_type. apply (HΣ ev entry H).
   + intros i. depelim i.
 - assumption.
-Qed.
-
-(** Evar expansion preserves typing. *)
-Lemma typing_evar_expand {s} Σ Γ ev ty def (T : term s) :
-  typing_evar_map Σ ->
-  Σ ;; Γ ⊢ TEvar ev : T ->
-  Σ ev = Some (mk_evar_entry ty (Some def)) ->
-  Σ ;; Γ ⊢ wk def : T.
-Proof.
-intros H1 H2 H3. pose proof (HT := typing_evar_expand_helper _ _ _ _ H1 H2).
-specialize (H1 _ _ H3). depelim H1.
-apply typing_evar_inv in H2. destruct H2 as (entry & H4 & H5).
-rewrite H4 in H3. depelim H3. cbn in H5. apply typing_conv_type with (wk ty).
-- unfold wk. eapply typing_rename ; eauto. intros i. depelim i.
-- now symmetry.
-- assumption.
-Qed.
-
-(** Reducing a term doesn't change its type. *)
-Lemma typing_red1 {s} Σ Γ (t u T : term s) :
-  typing_evar_map Σ ->
-  typing_context Σ Γ ->
-  Σ ;; Γ ⊢ t : T ->
-  Σ ⊢ t ~>₁ u ->
-  Σ ;; Γ ⊢ u : T.
-Proof.
-intros HΣ HΓ Ht Hred. depind Hred.
-- eapply typing_beta ; eauto.
-- eapply typing_evar_expand ; eauto.
-- (*apply typing_lam_inv in Ht. destruct Ht as (body_ty & H1 & Hty & Hbody).
-  apply IHHred in Hty ; auto. rewrite Hred in H1.
-  apply typing_conv_type with (TProd x ty' body_ty).
-  + apply typing_lam.
-    * assumption.
-    *
-
-  apply typing_lam. apply IHHred.*)
-
-
-apply HΣ in H. depelim H.  depelim Ht. apply typing_evar_entry.
-
-Admitted.
-
-(** In a typing derivation, the type is itself well-typed. *)
-Lemma typing_type_ok {s} Σ Γ (t T : term s) :
-  typing_evar_map Σ ->
-  typing_context Σ Γ ->
-  Σ ;; Γ ⊢ t : T ->
-  Σ ;; Γ ⊢ T : TType.
-Proof.
-intros Hevm Hctx Ht. induction Ht.
-- constructor.
-- rewrite <-H. now apply typing_lookup_context.
-- constructor ; auto. apply IHHt2 ; auto. constructor ; auto.
-- constructor.
-- clear f H Ht. depind H0 ; [auto |]. apply IHAll_spine. intros _ _.
-  destruct H as [H _].
-  assert (Σ ;; Γ ⊢ a : TType) by admit.
-  assert (Σ ;; CCons Γ x a ⊢ b : TType) by admit.
-  change TType with (TType [x := arg]). eapply typing_substitute.
-  + eassumption.
-  + apply typing_scons.
-    * simpl_subst. apply H1.
-    * apply typing_sid.
-- unfold wk. change (@TType s) with (@rename ∅ s wk_idx TType).
-  eapply typing_rename.
-  + apply typing_evar_type. now apply (Hevm ev).
-  + intros i. depelim i.
-- assumption.
-Admitted.
-
-
-(** Changing a term to a convertible one doesn't change its type. *)
-Lemma typing_conv {s} Σ Γ (t u T : term s) :
-  Σ ;; Γ ⊢ t : T ->
-  Σ ⊢ t ≡ u ->
-  Σ ;; Γ ⊢ u : T.
-Proof. Admitted.
-
-#[export] Instance typing_conv_Proper {s} Σ Γ :
-  Proper (conv Σ ==> eq ==> iff) (@typing s Σ Γ).
-Proof.
-intros t t' Ht T T' ->. split ; intros H ; eapply typing_conv ; eauto. now symmetry.
 Qed.
