@@ -6,8 +6,8 @@ From Metaprog Require Export Data.Context MetaTheory.Conversion.
     - Compatibility with renaming and substitution.
     - Inversion lemmas.
 
-    We also define a notion of typing for various data-types such as
-    contexts, evar-maps, renamings, and substitutions.
+    This module also defines a notion of typing for various data-types
+    such as contexts, evar-maps, renamings, and substitutions.
 *)
 
 (***********************************************************************)
