@@ -506,7 +506,7 @@ Lemma typing_evar_type Σ entry :
   Σ ;; CNil ⊢ entry.(evar_type) : TType.
 Proof. intros H. destruct H ; cbn ; assumption. Qed.
 
-(** This lemma is be subsumed by the more general lemma [typing_type_ok]. *)
+(** This lemma is subsumed by the more general lemma [typing_type_ok]. *)
 Lemma typing_evar_type_ok {s} Σ Γ ev (T : term s) :
   typing_evar_map Σ ->
   Σ ;; Γ ⊢ TEvar ev : T ->
