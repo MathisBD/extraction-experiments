@@ -8,17 +8,17 @@ From Metaprog.MetaTheory Require Export Confluence.
 (** * Conversion relation [conv]. *)
 (***********************************************************************)
 
-Reserved Notation "Γ |- t ≡ u"
+Reserved Notation "Γ ⊢ t ≡ u"
   (at level 50, no associativity, t at next level, u at next level).
 
 (** Conversion relation, defined as the smallest equivalence relation containing [red1]. *)
 Inductive conv {s} Σ : term s -> term s -> Prop :=
-| conv_of_red1 t1 t2 : Σ |- t1 ~>₁ t2 -> Σ |- t1 ≡ t2
-| conv_refl t : Σ |- t ≡ t
-| conv_sym t1 t2 : Σ |- t1 ≡ t2 -> Σ |- t2 ≡ t1
-| conv_trans t1 t2 t3 : Σ |- t1 ≡ t2 -> Σ |- t2 ≡ t3 -> Σ |- t1 ≡ t3
+| conv_of_red1 t1 t2 : Σ ⊢ t1 ~>₁ t2 -> Σ ⊢ t1 ≡ t2
+| conv_refl t : Σ ⊢ t ≡ t
+| conv_sym t1 t2 : Σ ⊢ t1 ≡ t2 -> Σ ⊢ t2 ≡ t1
+| conv_trans t1 t2 t3 : Σ ⊢ t1 ≡ t2 -> Σ ⊢ t2 ≡ t3 -> Σ ⊢ t1 ≡ t3
 
-where "Σ |- t ≡ u" := (conv Σ t u).
+where "Σ ⊢ t ≡ u" := (conv Σ t u).
 
 Derive Signature for conv.
 
@@ -32,7 +32,7 @@ Proof. intros t1 t2. apply conv_sym. Qed.
 Proof. intros t. apply conv_trans. Qed.
 
 Lemma conv_of_red {s} Σ (t u : term s) :
-  Σ |- t ~> u -> Σ |- t ≡ u.
+  Σ ⊢ t ~> u -> Σ ⊢ t ≡ u.
 Proof.
 intros H. induction H.
 - reflexivity.
@@ -54,8 +54,8 @@ Proof. intros t u H. unfold Basics.flip. symmetry. now apply conv_of_red. Qed.
 (** The Church-Rosser theorem is a direct consequence of the confluence lemma.
     We use Church-Rosser to prove inversion lemmas for [conv]. *)
 Lemma church_rosser {s} Σ (t1 t2 : term s) :
-  Σ |- t1 ≡ t2 <->
-  exists u, Σ |- t1 ~> u /\ Σ |- t2 ~> u.
+  Σ ⊢ t1 ≡ t2 <->
+  exists u, Σ ⊢ t1 ~> u /\ Σ ⊢ t2 ~> u.
 Proof.
 split ; intros H.
 - depind H.
@@ -76,7 +76,7 @@ Section CongruenceLemmas.
   Context {s : scope} (Σ : evar_map).
 
   Lemma conv_beta x (ty : term s) body arg args :
-    Σ |- TApp (TLam x ty body) (arg :: args) ≡ TApp (body[x := arg]) args.
+    Σ ⊢ TApp (TLam x ty body) (arg :: args) ≡ TApp (body[x := arg]) args.
   Proof. now rewrite red_beta. Qed.
 
   #[export] Instance conv_lam_congr x :
@@ -113,7 +113,7 @@ Section CongruenceLemmas.
 
   Lemma conv_app_congr_aux (f : term s) l (args args' : list (term s)) :
     All2 (conv Σ) args args' ->
-    Σ |- TApp f (l ++ args) ≡ TApp f (l ++ args').
+    Σ ⊢ TApp f (l ++ args) ≡ TApp f (l ++ args').
   Proof.
   intros H. revert f l. depind H ; intros f l.
   - reflexivity.
@@ -163,8 +163,8 @@ Section InversionLemmas.
   Context {s : scope} (Σ : evar_map).
 
   Lemma conv_lam_inv x (ty ty' : term s) body body' :
-    Σ |- TLam x ty body ≡ TLam x ty' body' ->
-    Σ |- ty ≡ ty' /\ Σ |- body ≡ body'.
+    Σ ⊢ TLam x ty body ≡ TLam x ty' body' ->
+    Σ ⊢ ty ≡ ty' /\ Σ ⊢ body ≡ body'.
   Proof.
   intros H. apply church_rosser in H. destruct H as (t & H1 & H2).
   apply red_lam_inv in H1, H2.
@@ -180,8 +180,8 @@ Section InversionLemmas.
   Qed.
 
   Lemma conv_prod_inv x (a a' : term s) b b' :
-    Σ |- TProd x a b ≡ TProd x a' b' ->
-    Σ |- a ≡ a' /\ Σ |- b ≡ b'.
+    Σ ⊢ TProd x a b ≡ TProd x a' b' ->
+    Σ ⊢ a ≡ a' /\ Σ ⊢ b ≡ b'.
   Proof.
   intros H. apply church_rosser in H. destruct H as (t & H1 & H2).
   apply red_prod_inv in H1, H2.

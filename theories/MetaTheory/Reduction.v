@@ -9,7 +9,7 @@ From Metaprog.MetaTheory Require Export Relations Substitution EvarMap.
 (** * One-step reduction relation [red1]. *)
 (***********************************************************************)
 
-Reserved Notation "Σ |- t ~>₁ u"
+Reserved Notation "Σ ⊢ t ~>₁ u"
   (at level 50, no associativity, t at next level, u at next level).
 
 Unset Elimination Schemes.
@@ -19,32 +19,32 @@ Inductive red1 {s} Σ : term s -> term s -> Prop :=
 
 (** Beta-reduction rule. *)
 | red1_beta x ty body arg args :
-    Σ |- TApp (TLam x ty body) (arg :: args) ~>₁ TApp (body[x := arg]) args
+    Σ ⊢ TApp (TLam x ty body) (arg :: args) ~>₁ TApp (body[x := arg]) args
 
 (** Evar expansion. *)
 | red1_evar_expand ev ty def :
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
-    Σ |- TEvar ev ~>₁ wk def
+    Σ ⊢ TEvar ev ~>₁ wk def
 
 (** Congrence rules for [TLam]. *)
 | red1_lam_l x ty ty' body :
-    Σ |- ty ~>₁ ty' -> Σ |- TLam x ty body ~>₁ TLam x ty' body
+    Σ ⊢ ty ~>₁ ty' -> Σ ⊢ TLam x ty body ~>₁ TLam x ty' body
 | red1_lam_r x ty body body' :
-    Σ |- body ~>₁ body' -> Σ |- TLam x ty body ~>₁ TLam x ty body'
+    Σ ⊢ body ~>₁ body' -> Σ ⊢ TLam x ty body ~>₁ TLam x ty body'
 
 (** Congruence rules for [TProd]. *)
 | red1_prod_l x a a' b :
-    Σ |- a ~>₁ a' -> Σ |- TProd x a b ~>₁ TProd x a' b
+    Σ ⊢ a ~>₁ a' -> Σ ⊢ TProd x a b ~>₁ TProd x a' b
 | red1_prod_r x a b b' :
-    Σ |- b ~>₁ b' -> Σ |- TProd x a b ~>₁ TProd x a b'
+    Σ ⊢ b ~>₁ b' -> Σ ⊢ TProd x a b ~>₁ TProd x a b'
 
 (** Congruence rules for [TApp]. *)
 | red1_app_l f f' args :
-    Σ |- f ~>₁ f' -> Σ |- TApp f args ~>₁ TApp f' args
+    Σ ⊢ f ~>₁ f' -> Σ ⊢ TApp f args ~>₁ TApp f' args
 | red1_app_r f args args' :
-    OnOne2 (red1 Σ) args args' -> Σ |- TApp f args ~>₁ TApp f args'
+    OnOne2 (red1 Σ) args args' -> Σ ⊢ TApp f args ~>₁ TApp f args'
 
-where "Σ |- t ~>₁ u" := (red1 Σ t u).
+where "Σ ⊢ t ~>₁ u" := (red1 Σ t u).
 
 Set Elimination Schemes.
 
@@ -63,29 +63,29 @@ Lemma red1_ind (P : forall s, evar_map -> term s -> term s -> Prop) :
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
     P s Σ (TEvar ev) (wk def)) ->
   (forall s Σ x ty ty' body,
-    Σ |- ty ~>₁ ty' ->
+    Σ ⊢ ty ~>₁ ty' ->
     P s Σ ty ty' ->
     P s Σ (TLam x ty body) (TLam x ty' body)) ->
   (forall s Σ x ty body body',
-    Σ |- body ~>₁ body' ->
+    Σ ⊢ body ~>₁ body' ->
     P (s ▷ x) Σ body body' ->
     P s Σ (TLam x ty body) (TLam x ty body')) ->
   (forall s Σ x a a' b,
-    Σ |- a ~>₁ a' ->
+    Σ ⊢ a ~>₁ a' ->
     P s Σ a a' ->
     P s Σ (TProd x a b) (TProd x a' b)) ->
   (forall s Σ x a b b',
-    Σ |- b ~>₁ b' ->
+    Σ ⊢ b ~>₁ b' ->
     P (s ▷ x) Σ b b' ->
     P s Σ (TProd x a b) (TProd x a b')) ->
   (forall s Σ f f' args,
-    Σ |- f ~>₁ f' ->
+    Σ ⊢ f ~>₁ f' ->
     P s Σ f f' ->
     P s Σ (TApp f args) (TApp f' args)) ->
   (forall s Σ f args args',
-    OnOne2 (fun arg arg' => Σ |- arg ~>₁ arg' /\ P s Σ arg arg') args args' ->
+    OnOne2 (fun arg arg' => Σ ⊢ arg ~>₁ arg' /\ P s Σ arg arg') args args' ->
     P s Σ (TApp f args) (TApp f args')) ->
-  forall s Σ t t', Σ |- t ~>₁ t' -> P s Σ t t'.
+  forall s Σ t t', Σ ⊢ t ~>₁ t' -> P s Σ t t'.
 Proof.
 intros Hbeta Hevar Hlam_l Hlam_r Hprod_l Hprod_r Happ_l Happ_r. fix IH 5.
 intros s Σ t t' Hred. destruct Hred.
@@ -111,15 +111,15 @@ Definition red {s} (Σ : evar_map) : term s -> term s -> Prop :=
 
 Arguments red : simpl never.
 
-Notation "Σ |- t ~> u" := (red Σ t u)
+Notation "Σ ⊢ t ~> u" := (red Σ t u)
   (at level 50, no associativity, t at next level, u at next level).
 
 Lemma red_same {s} Σ (t u : term s) :
-  t = u -> Σ |- t ~> u.
+  t = u -> Σ ⊢ t ~> u.
 Proof. intros ->. reflexivity. Qed.
 
 Lemma red_of_red1 {s} Σ (t u : term s) :
-  Σ |- t ~>₁ u -> Σ |- t ~> u.
+  Σ ⊢ t ~>₁ u -> Σ ⊢ t ~> u.
 Proof. apply refl_trans_clos_one. Qed.
 
 #[export] Instance subrelation_red1_red s Σ :
@@ -133,13 +133,18 @@ Proof. intros t u H. now apply red_of_red1. Qed.
 Section CongruenceLemmas.
   Context {s : scope} (Σ : evar_map).
 
+  Lemma red1_beta_alt x (ty : term s) body arg args t :
+    t = TApp (body[x := arg]) args ->
+    Σ ⊢ TApp (TLam x ty body) (arg :: args) ~>₁ t.
+  Proof. intros ->. apply red1_beta. Qed.
+
   Lemma red_beta x (ty : term s) body arg args :
-    Σ |- TApp (TLam x ty body) (arg :: args) ~> TApp (body[x := arg]) args.
+    Σ ⊢ TApp (TLam x ty body) (arg :: args) ~> TApp (body[x := arg]) args.
   Proof. now rewrite red1_beta. Qed.
 
   Lemma red_evar_expand ev ty def :
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
-    Σ |- @TEvar s ev ~> wk def.
+    Σ ⊢ @TEvar s ev ~> wk def.
   Proof. intros H. rewrite red1_evar_expand ; eauto. reflexivity. Qed.
 
   #[export] Instance red_lam_congr x :
@@ -168,7 +173,7 @@ Section CongruenceLemmas.
 
   Lemma red_app_congr_aux (f : term s) l (args args' : list (term s)) :
     All2 (red Σ) args args' ->
-    Σ |- TApp f (l ++ args) ~> TApp f (l ++ args').
+    Σ ⊢ TApp f (l ++ args) ~> TApp f (l ++ args').
   Proof.
   intros H. revert f l. depind H ; intros f l.
   - reflexivity.
@@ -201,7 +206,7 @@ Section InversionLemmas.
   Context {s : scope} (Σ : evar_map).
 
   Lemma red_type_inv (t : term s) :
-    Σ |- TType ~> t -> t = TType.
+    Σ ⊢ TType ~> t -> t = TType.
   Proof.
   intros H. depind H.
   - reflexivity.
@@ -209,7 +214,7 @@ Section InversionLemmas.
   Qed.
 
   Lemma red_var_inv (i : index s) (t : term s) :
-    Σ |- TVar i ~> t -> t = TVar i.
+    Σ ⊢ TVar i ~> t -> t = TVar i.
   Proof.
   intros H. depind H.
   - reflexivity.
@@ -217,11 +222,11 @@ Section InversionLemmas.
   Qed.
 
   Lemma red_lam_inv x (ty : term s) body t :
-    Σ |- TLam x ty body ~> t ->
+    Σ ⊢ TLam x ty body ~> t ->
     exists ty' body',
       t = TLam x ty' body' /\
-      Σ |- ty ~> ty' /\
-      Σ |- body ~> body'.
+      Σ ⊢ ty ~> ty' /\
+      Σ ⊢ body ~> body'.
   Proof.
   intros Hred. depind Hred.
   - exists ty, body. now split3.
@@ -233,11 +238,11 @@ Section InversionLemmas.
   Qed.
 
   Lemma red_prod_inv x (a : term s) b t :
-    Σ |- TProd x a b ~> t ->
+    Σ ⊢ TProd x a b ~> t ->
     exists a' b',
       t = TProd x a' b' /\
-      Σ |- a ~> a' /\
-      Σ |- b ~> b'.
+      Σ ⊢ a ~> a' /\
+      Σ ⊢ b ~> b'.
   Proof.
   intros Hred. depind Hred.
   - exists a, b. now split3.
@@ -262,11 +267,7 @@ Section SubstitutionLemma.
     Proper (red1 Σ ==> red1 Σ) (rename ρ).
   Proof.
   intros t t' H. induction H in s', ρ |- * ; simpl_subst.
-  - cbn.
-    assert (substitute (srcomp (scons x arg sid) ρ) body =
-            substitute (scons x (rename ρ arg) sid) (rename (rup x ρ) body)) as ->.
-    { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
-    apply red1_beta.
+  - cbn. apply red1_beta_alt. f_equal. now simpl_subst.
   - eapply red1_evar_expand. eassumption.
   - now apply red1_lam_l.
   - now apply red1_lam_r.
@@ -290,11 +291,7 @@ Section SubstitutionLemma.
     Proper (red1 Σ ==> red1 Σ) (substitute σ).
   Proof.
   intros t t' H. induction H in s', σ |- * ; simpl_subst.
-  - cbn.
-    assert (substitute (scomp (scons x arg sid) σ) body =
-            substitute (scons x (substitute σ arg) sid) (substitute (sup x σ) body)) as ->.
-    { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
-    apply red1_beta.
+  - cbn. apply red1_beta_alt. f_equal. now simpl_subst.
   - eapply red1_evar_expand. eassumption.
   - now apply red1_lam_l.
   - now apply red1_lam_r.

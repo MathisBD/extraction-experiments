@@ -55,15 +55,47 @@ Tactic Notation "subst_ext" ident(i) := apply subst_ext ; intros i.
 (** * [simpl_subst] tactic. *)
 (***********************************************************************)
 
+Lemma ren_closed {s} (ρ : ren ∅ s) :
+  ρ = wk_idx.
+Proof. ren_ext i. depelim i. Qed.
+#[export] Hint Rewrite @ren_closed : subst_alt.
+
+Lemma subst_closed {s} (σ : subst ∅ s) :
+  σ = sren wk_idx.
+Proof. subst_ext i. depelim i. Qed.
+#[export] Hint Rewrite @subst_closed : subst.
+
+Ltac rewrite_ren_closed :=
+  match goal with
+  | |- context[ ?ρ ] => rewrite (ren_closed ρ)
+  | _ => idtac
+  end.
+
+Ltac rewrite_ren_closed_in H :=
+  match goal with
+  | H : context[ ?ρ ] |- _ => rewrite (ren_closed ρ) in H
+  | _ => idtac
+  end.
+
+Lemma fold_wk {s s'} (t : term s) (H : ScopeIncl s s') :
+  rename wk_idx t = @wk s s' H t.
+Proof. reflexivity. Qed.
+
 (** [simpl_subst] uses the hint database [subst] to allow for easy extension.
 
     We are quite conservative in which lemmas we put in the [subst] database,
     because [simpl_subst] can easily loop indefinitely if we aren't careful. *)
 Ltac simpl_subst :=
-  repeat progress (rewrite_strat (bottomup (hints subst))).
+  unfold wk ;
+  (repeat progress (rewrite_strat (topdown (progress (hints subst))))) ;
+  rewrite_ren_closed ;
+  (try rewrite !fold_wk).
 
 Ltac simpl_subst_in H :=
-  repeat progress (rewrite_strat (bottomup (hints subst)) in H).
+  unfold wk in H ;
+  (repeat progress (rewrite_strat (topdown (progress (hints subst))) in H)) ;
+  rewrite_ren_closed_in H ;
+  (try rewrite !fold_wk in H).
 
 Tactic Notation "simpl_subst" "in" ident(H) :=
   simpl_subst_in H.
@@ -93,6 +125,21 @@ Proof. reflexivity. Qed.
 
 #[export] Hint Rewrite app_nil_l : subst.
 #[export] Hint Rewrite app_nil_r : subst.
+
+Lemma wk_idx_refl {s} :
+  @wk_idx _ _ (scope_incl_refl s) = rid.
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @wk_idx_refl : subst.
+
+Lemma wk_idx_incl_extend_r {x s s'} (H : ScopeIncl s s') :
+  @wk_idx _ _ (scope_incl_extend_r x s s' H) = rcomp wk_idx rshift.
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @wk_idx_incl_extend_r : subst.
+
+Lemma wk_idx_incl_extend {x s s'} (H : ScopeIncl s s') :
+  @wk_idx _ _ (scope_incl_extend x s s' H) = rup x wk_idx.
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @wk_idx_incl_extend : subst.
 
 (***********************************************************************)
 (** * Lemmas about [apps]. *)
@@ -244,28 +291,82 @@ Proof. ren_ext j. depelim j ; simpl_subst ; reflexivity. Qed.
 #[export] Hint Rewrite @rcomp_rcons_l : subst.
 
 Lemma rcomp_rup_l {x s s' s''} (ρ1 : ren s s') (ρ2 : ren (s' ▷ x) s'') :
-  rcomp (rup x ρ1) ρ2 = rcons x (rapply ρ2 I0) (rcomp (rcomp ρ1 rshift) ρ2).
+  rcomp (rup x ρ1) ρ2 = rcons x (rapply ρ2 I0) (rcomp ρ1 (rcomp rshift ρ2)).
 Proof. ren_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
 #[export] Hint Rewrite @rcomp_rup_l : subst.
 
 (***********************************************************************)
-(** * Renamings and closed terms. *)
+(** * Renaming smart constructors. *)
 (***********************************************************************)
 
-Lemma ren_closed {s} (ρ : ren ∅ s) :
-  ρ = wk_idx.
-Proof. ren_ext i. depelim i. Qed.
+Lemma rename_lam {s s'} (ty : term s) (body : forall x, term (s ▷ x)) (ρ : ren s s') :
+  rename ρ (lam ty body) = lam (rename ρ ty) (fun x => rename (rup x ρ) (body x)).
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @rename_lam : subst.
 
-Lemma rename_closed {s} (ρ : ren ∅ s) (t : term ∅) :
-  rename ρ t = wk t.
-Proof. rewrite (ren_closed ρ). reflexivity. Qed.
+Lemma rename_prod {s s'} (a : term s) (b : forall x, term (s ▷ x)) (ρ : ren s s') :
+  rename ρ (prod a b) = prod (rename ρ a) (fun x => rename (rup x ρ) (b x)).
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @rename_prod : subst.
 
-Lemma rename_wk_closed {s s'} (ρ : ren s s') (t : term ∅) :
-  rename ρ (wk t) = wk t.
+Lemma rename_arrow {s s'} (a b : term s) (ρ : ren s s') :
+  rename ρ (arrow a b) = arrow (rename ρ a) (rename ρ b).
+Proof. unfold arrow. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @rename_arrow : subst.
+
+(***********************************************************************)
+(** * Lemmas about [sren]. *)
+(***********************************************************************)
+
+Lemma sapply_sren {s s'} (ρ : ren s s') i :
+  sapply (sren ρ) i = TVar (rapply ρ i).
+Proof. reflexivity. Qed.
+#[export] Hint Rewrite @sapply_sren : subst.
+
+Lemma sren_rid {s} :
+  sren (@rid s) = sid.
+Proof. subst_ext i. reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rid : subst.*)
+
+Lemma sren_rshift {s x} :
+  sren (@rshift s x) = sshift.
+Proof. subst_ext i. reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rshift : subst.*)
+
+Lemma sren_rcons {s s' x} i (ρ : ren s s') :
+  sren (rcons x i ρ) = scons x (TVar i) (sren ρ).
+Proof. subst_ext j. depelim j ; simpl_subst ; reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rcons : subst.*)
+
+Lemma sren_rcomp {s s' s''} (ρ1 : ren s s') (ρ2 : ren s' s'') :
+  sren (rcomp ρ1 ρ2) = scomp (sren ρ1) (sren ρ2).
+Proof. subst_ext i. reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rcomp : subst.*)
+
+Lemma sren_rup {x s s'} (ρ : ren s s') :
+  sren (rup x ρ) = sup x (sren ρ).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+(* #[export] Hint Rewrite @sren_rup : subst.*)
+
+Lemma substitute_sren {s s'} (ρ : ren s s') t :
+  substitute (sren ρ) t = rename ρ t.
 Proof.
-unfold wk. simpl_subst. rewrite (ren_closed (rcomp wk_idx ρ)). reflexivity.
+induction t using term_ind' in s', ρ |- * ; simpl_subst.
+- reflexivity.
+- reflexivity.
+- rewrite <-sren_rup. now rewrite IHt1, IHt2.
+- rewrite <-sren_rup. now rewrite IHt1, IHt2.
+- rewrite IHt. f_equal. induction H ; cbn.
+  + reflexivity.
+  + now rewrite H, IHForall.
+- reflexivity.
 Qed.
-#[export] Hint Rewrite @rename_wk_closed : subst.
+#[export] Hint Rewrite @substitute_sren : subst.
+
+Lemma substitute_sshift {s x} t :
+  substitute (@sshift s x) t = rename rshift t.
+Proof. rewrite <-substitute_sren. reflexivity. Qed.
+#[export] Hint Rewrite @substitute_sshift : subst.
 
 (***********************************************************************)
 (** * Lemmas about [sapply]. *)
@@ -343,24 +444,44 @@ induction t using term_ind' in s', s'', σ, ρ |- * ; simpl_subst.
 Qed.
 #[export] Hint Rewrite @rename_substitute : subst.
 
-Lemma srcomp_rid {s s'} (σ : subst s s') :
+Lemma srcomp_rid_r {s s'} (σ : subst s s') :
   srcomp σ rid = σ.
 Proof. subst_ext i. simpl_subst. reflexivity. Qed.
-#[export] Hint Rewrite @srcomp_rid : subst.
+#[export] Hint Rewrite @srcomp_rid_r : subst.
+
+Lemma srcomp_sid_l {s s'} (ρ : ren s s') :
+  srcomp sid ρ = sren ρ.
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @srcomp_sid_l : subst.
 
 Lemma srcomp_assoc {s s' s'' s'''} (σ1 : subst s s') (σ2 : subst s' s'') (ρ3 : ren s'' s''') :
   srcomp (scomp σ1 σ2) ρ3 = scomp σ1 (srcomp σ2 ρ3).
 Proof. subst_ext i. simpl_subst. reflexivity. Qed.
 #[export] Hint Rewrite @srcomp_assoc : subst.
 
+Lemma srcomp_scons_l {x s s' s''} t (σ1 : subst s s') (ρ2 : ren s' s'') :
+  srcomp (scons x t σ1) ρ2 = scons x (rename ρ2 t) (srcomp σ1 ρ2).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @srcomp_scons_l : subst.
+
+Lemma srcomp_sup_l {x s s' s''} (σ1 : subst s s') (ρ2 : ren (s' ▷ x) s'') :
+  srcomp (sup x σ1) ρ2 = scons x (TVar (rapply ρ2 I0)) (srcomp σ1 (rcomp rshift ρ2)).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @srcomp_sup_l : subst.
+
 (***********************************************************************)
 (** * Lemmas about [rscomp]. *)
 (***********************************************************************)
 
-Lemma rscomp_rid {s s'} (σ : subst s s') :
+Lemma rscomp_rid_l {s s'} (σ : subst s s') :
   rscomp rid σ = σ.
 Proof. subst_ext i. simpl_subst. reflexivity. Qed.
-#[export] Hint Rewrite @rscomp_rid : subst.
+#[export] Hint Rewrite @rscomp_rid_l : subst.
+
+Lemma rscomp_sid_r {s s'} (ρ : ren s s') :
+  rscomp ρ sid = sren ρ.
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @rscomp_sid_r : subst.
 
 Lemma rscomp_rshift_scons {x s s'} t (σ : subst s s') :
   rscomp rshift (scons x t σ) = σ.
@@ -400,6 +521,16 @@ Lemma rscomp_assoc {s s' s'' s'''} (ρ1 : ren s s') (σ2 : subst s' s'') (σ3 : 
   scomp (rscomp ρ1 σ2) σ3 = rscomp ρ1 (scomp σ2 σ3).
 Proof. subst_ext i. simpl_subst. reflexivity. Qed.
 #[export] Hint Rewrite @rscomp_assoc : subst.
+
+Lemma rscomp_rcons_l {x s s' s''} i (ρ1 : ren s s') (σ2 : subst s' s'') :
+  rscomp (rcons x i ρ1) σ2 = scons x (sapply σ2 i) (rscomp ρ1 σ2).
+Proof. subst_ext j. depelim j ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @rscomp_rcons_l : subst.
+
+Lemma rscomp_rup_l {x s s' s''} (ρ1 : ren s s') (σ2 : subst (s' ▷ x) s'') :
+  rscomp (rup x ρ1) σ2 = scons x (sapply σ2 I0) (rscomp ρ1 (rscomp rshift σ2)).
+Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
+#[export] Hint Rewrite @rscomp_rup_l : subst.
 
 (***********************************************************************)
 (** * Lemmas about [scomp]. *)
@@ -456,82 +587,16 @@ Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
 #[export] Hint Rewrite @scomp_scons_l : subst.
 
 Lemma scomp_sup_l {x s s' s''} (σ1 : subst s s') (σ2 : subst (s' ▷ x) s'') :
-  scomp (sup x σ1) σ2 = scons x (sapply σ2 I0) (scomp (scomp σ1 sshift) σ2).
+  scomp (sup x σ1) σ2 = scons x (sapply σ2 I0) (scomp σ1 (scomp sshift σ2)).
 Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
 #[export] Hint Rewrite @scomp_sup_l : subst.
 
-(***********************************************************************)
-(** * Lemmas about [sren]. *)
-(***********************************************************************)
+Lemma scomp_sshift_scons {x s s'} t (σ : subst s s') :
+  scomp sshift (scons x t σ) = σ.
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @scomp_sshift_scons : subst.
 
-Lemma sapply_sren {s s'} (ρ : ren s s') i :
-  sapply (sren ρ) i = TVar (rapply ρ i).
-Proof. reflexivity. Qed.
-#[export] Hint Rewrite @sapply_sren : subst.
-
-Lemma sren_rid {s} :
-  sren (@rid s) = sid.
-Proof. subst_ext i. reflexivity. Qed.
-(* #[export] Hint Rewrite @sren_rid : subst.*)
-
-Lemma sren_rshift {s x} :
-  sren (@rshift s x) = sshift.
-Proof. subst_ext i. reflexivity. Qed.
-(* #[export] Hint Rewrite @sren_rshift : subst.*)
-
-Lemma sren_rcons {s s' x} i (ρ : ren s s') :
-  sren (rcons x i ρ) = scons x (TVar i) (sren ρ).
-Proof. subst_ext j. depelim j ; simpl_subst ; reflexivity. Qed.
-(* #[export] Hint Rewrite @sren_rcons : subst.*)
-
-Lemma sren_rcomp {s s' s''} (ρ1 : ren s s') (ρ2 : ren s' s'') :
-  sren (rcomp ρ1 ρ2) = scomp (sren ρ1) (sren ρ2).
-Proof. subst_ext i. reflexivity. Qed.
-(* #[export] Hint Rewrite @sren_rcomp : subst.*)
-
-Lemma sren_rup {x s s'} (ρ : ren s s') :
-  sren (rup x ρ) = sup x (sren ρ).
-Proof. subst_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
-(* #[export] Hint Rewrite @sren_rup : subst.*)
-
-Lemma substitute_sren {s s'} (ρ : ren s s') t :
-  substitute (sren ρ) t = rename ρ t.
-Proof.
-induction t using term_ind' in s', ρ |- * ; simpl_subst.
-- reflexivity.
-- reflexivity.
-- rewrite <-sren_rup. now rewrite IHt1, IHt2.
-- rewrite <-sren_rup. now rewrite IHt1, IHt2.
-- rewrite IHt. f_equal. induction H ; cbn.
-  + reflexivity.
-  + now rewrite H, IHForall.
-- reflexivity.
-Qed.
-#[export] Hint Rewrite @substitute_sren : subst.
-
-Lemma substitute_sshift {s x} t :
-  substitute (@sshift s x) t = rename rshift t.
-Proof. rewrite <-substitute_sren. reflexivity. Qed.
-#[export] Hint Rewrite @substitute_sshift : subst.
-
-(***********************************************************************)
-(** * Substitutions and closed terms. *)
-(***********************************************************************)
-
-Lemma subst_closed {s} (σ : subst ∅ s) :
-  σ = sren wk_idx.
-Proof. subst_ext i. depelim i. Qed.
-
-Lemma substitute_closed {s} (σ : subst ∅ s) (t : term ∅) :
-  substitute σ t = wk t.
-Proof. rewrite (subst_closed σ). simpl_subst. reflexivity. Qed.
-
-Lemma substitute_wk_closed {s s'} (σ : subst s s') (t : term ∅) :
-  substitute σ (wk t) = wk t.
-Proof.
-unfold wk. simpl_subst. rewrite (subst_closed (rscomp wk_idx σ)).
-simpl_subst. reflexivity.
-Qed.
-#[export] Hint Rewrite @substitute_wk_closed : subst.
-
-(** TODO: srcomp and rscomp when the left-hand side is [cons] or [up]. *)
+Lemma scomp_sshift_sup {x s s'} (σ : subst s s') :
+  scomp sshift (sup x σ) = scomp σ sshift.
+Proof. subst_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @scomp_sshift_sup : subst.

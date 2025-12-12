@@ -8,7 +8,7 @@ From Metaprog.MetaTheory Require Export Reduction.
 (** * Parallel reduction. *)
 (***********************************************************************)
 
-#[local] Reserved Notation "Σ |- t >> u"
+#[local] Reserved Notation "Σ ⊢ t >> u"
   (at level 50, no associativity, t at next level, u at next level).
 
 Unset Elimination Schemes.
@@ -18,43 +18,43 @@ Inductive pred1 {s} (Σ : evar_map) : term s -> term s -> Prop :=
 
 (** Beta-reduction rule. *)
 | pred1_app_beta x ty body body' arg arg' args args' :
-    Σ |- body >> body' ->
-    Σ |- arg >> arg' ->
+    Σ ⊢ body >> body' ->
+    Σ ⊢ arg >> arg' ->
     All2 (pred1 Σ) args args' ->
-    Σ |- TApp (TLam x ty body) (arg :: args) >> TApp (body'[x := arg']) args'
+    Σ ⊢ TApp (TLam x ty body) (arg :: args) >> TApp (body'[x := arg']) args'
 
 (** Evar expansion rule. *)
 | pred1_evar_expand ev ty def :
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
-    Σ |- TEvar ev >> wk def
+    Σ ⊢ TEvar ev >> wk def
 
 (** Congruence rules. *)
 
 | pred1_type :
-    Σ |- TType >> TType
+    Σ ⊢ TType >> TType
 
 | pred1_var i :
-    Σ |- TVar i >> TVar i
+    Σ ⊢ TVar i >> TVar i
 
 | pred1_lam x ty ty' body body' :
-    Σ |- ty >> ty' ->
-    Σ |- body >> body' ->
-    Σ |- TLam x ty body >> TLam x ty' body'
+    Σ ⊢ ty >> ty' ->
+    Σ ⊢ body >> body' ->
+    Σ ⊢ TLam x ty body >> TLam x ty' body'
 
 | pred1_prod x a a' b b' :
-    Σ |- a >> a' ->
-    Σ |- b >> b' ->
-    Σ |- TProd x a b >> TProd x a' b'
+    Σ ⊢ a >> a' ->
+    Σ ⊢ b >> b' ->
+    Σ ⊢ TProd x a b >> TProd x a' b'
 
 | pred1_app f f' args args' :
-    Σ |- f >> f' ->
+    Σ ⊢ f >> f' ->
     All2 (pred1 Σ) args args' ->
-    Σ |- TApp f args >> TApp f' args'
+    Σ ⊢ TApp f args >> TApp f' args'
 
 | pred1_evar ev :
-    Σ |- TEvar ev >> TEvar ev
+    Σ ⊢ TEvar ev >> TEvar ev
 
-where "Σ |- t >> u" := (pred1 Σ t u).
+where "Σ ⊢ t >> u" := (pred1 Σ t u).
 
 Set Elimination Schemes.
 
@@ -69,9 +69,9 @@ Qed.
 
 (** Parallel reduction on substitutions is just pointwise parallel reduction. *)
 Definition pred1_subst {s s'} Σ (σ σ' : subst s s') : Prop :=
-  forall i, Σ |- sapply σ i >> sapply σ' i.
+  forall i, Σ ⊢ sapply σ i >> sapply σ' i.
 
-Notation "Σ |- σ1 >>ₛ σ2" := (pred1_subst Σ σ1 σ2)
+Notation "Σ ⊢ σ1 >>ₛ σ2" := (pred1_subst Σ σ1 σ2)
   (at level 50, no associativity, σ1 at next level, σ2 at next level).
 
 #[export] Instance pred1_subst_Reflexive s s' Σ :
@@ -86,8 +86,8 @@ Proof. intros σ i. reflexivity. Qed.
     because [pred1] is nested over [All2]. *)
 Lemma pred1_ind (P : forall s, evar_map -> term s -> term s -> Prop)
   (Hbeta : forall s Σ x ty body body' arg arg' args args',
-    Σ |- body >> body' -> P (s ▷ x) Σ body body' ->
-    Σ |- arg >> arg' -> P s Σ arg arg' ->
+    Σ ⊢ body >> body' -> P (s ▷ x) Σ body body' ->
+    Σ ⊢ arg >> arg' -> P s Σ arg arg' ->
     All2 (pred1 Σ) args args' -> All2 (P s Σ) args args' ->
     P s Σ (TApp (TLam x ty body) (arg :: args)) (TApp (body'[x := arg']) args'))
   (Hexpand : forall s Σ ev ty def,
@@ -98,20 +98,20 @@ Lemma pred1_ind (P : forall s, evar_map -> term s -> term s -> Prop)
   (Hvar : forall s Σ i,
     P s Σ (TVar i) (TVar i))
   (Hlam : forall s Σ x ty ty' body body',
-    Σ |- ty >> ty' -> P s Σ ty ty' ->
-    Σ |- body >> body' -> P (s ▷ x) Σ body body' ->
+    Σ ⊢ ty >> ty' -> P s Σ ty ty' ->
+    Σ ⊢ body >> body' -> P (s ▷ x) Σ body body' ->
     P s Σ (TLam x ty body) (TLam x ty' body'))
   (Hprod : forall s Σ x a a' b b',
-    Σ |- a >> a' -> P s Σ a a' ->
-    Σ |- b >> b' -> P (s ▷ x) Σ b b' ->
+    Σ ⊢ a >> a' -> P s Σ a a' ->
+    Σ ⊢ b >> b' -> P (s ▷ x) Σ b b' ->
     P s Σ (TProd x a b) (TProd x a' b'))
   (Happ : forall s Σ f f' args args',
-    Σ |- f >> f' -> P s Σ f f' ->
+    Σ ⊢ f >> f' -> P s Σ f f' ->
     All2 (pred1 Σ) args args' -> All2 (P s Σ) args args' ->
     P s Σ (TApp f args) (TApp f' args'))
   (Hevar : forall s Σ ev,
     P s Σ (TEvar ev) (TEvar ev)) :
-  forall s Σ t t', Σ |- t >> t' -> P s Σ t t'.
+  forall s Σ t t', Σ ⊢ t >> t' -> P s Σ t t'.
 Proof.
 fix IH 5. intros s Σ t t' Hred. destruct Hred.
 - apply Hbeta ; try assumption ; try now apply IH.
@@ -135,12 +135,12 @@ Qed.
 
 (** [pred1] admits the beta rule. *)
 Lemma pred1_beta {s} Σ x (ty : term s) body arg args :
-  Σ |- TApp (TLam x ty body) (arg :: args) >> TApp (body[x := arg]) args.
+  Σ ⊢ TApp (TLam x ty body) (arg :: args) >> TApp (body[x := arg]) args.
 Proof. now apply pred1_app_beta. Qed.
 
 (** One-step reduction is included in parallel reduction. *)
 Lemma pred1_of_red1 {s} Σ (t u : term s) :
-  Σ |- t ~>₁ u -> Σ |- t >> u.
+  Σ ⊢ t ~>₁ u -> Σ ⊢ t >> u.
 Proof.
 intros H. induction H.
 - apply pred1_beta.
@@ -156,7 +156,7 @@ Qed.
 
 (** Parallel reduction is included in standard reduction. *)
 Lemma red_of_pred1 {s} Σ (t u : term s) :
-  Σ |- t >> u -> Σ |- t ~> u.
+  Σ ⊢ t >> u -> Σ ⊢ t ~> u.
 Proof.
 intros H. induction H.
 - rewrite <-red_beta. apply red_app_congr.
@@ -173,7 +173,7 @@ Qed.
 
 (** The reflexive closure of [pred1] is equal to [red]. *)
 Lemma red_is_pred {s} Σ (t u : term s) :
-  Σ |- t ~> u <-> refl_trans_clos (pred1 Σ) t u.
+  Σ ⊢ t ~> u <-> refl_trans_clos (pred1 Σ) t u.
 Proof.
 split ; revert t u ; apply refl_trans_clos_incl.
 - intros t u H. apply refl_trans_clos_one. now apply pred1_of_red1.
@@ -184,17 +184,28 @@ Qed.
 (** * Compatibility with renaming and substitution. *)
 (***********************************************************************)
 
+Lemma pred1_app_beta_alt {s} Σ x (ty : term s) body body' arg arg' args args' t :
+  Σ ⊢ body >> body' ->
+  Σ ⊢ arg >> arg' ->
+  All2 (pred1 Σ) args args' ->
+  t = TApp (body' [x := arg']) args' ->
+  Σ ⊢ TApp (TLam x ty body) (arg :: args) >> t.
+Proof. intros H1 H2 H3 ->. now apply pred1_app_beta. Qed.
+
 (** Renaming lemma for [pred1]. *)
 #[export] Instance pred1_rename {s s'} Σ (ρ : ren s s') :
   Proper (pred1 Σ ==> pred1 Σ) (rename ρ).
 Proof.
 intros t t' H. induction H in s', ρ |- * ; simpl_subst.
-- cbn.
-  assert (substitute (srcomp (scons x arg' sid) ρ) body' =
-          substitute (scons x (rename ρ arg') sid) (rename (rup x ρ) body')) as ->.
-  { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
-  eapply pred1_app_beta ; eauto.
-  rewrite All2_map. revert H2. apply All2_consequence. firstorder.
+- eapply pred1_app_beta_alt
+    with (body' := rename (rup x ρ) body')
+         (arg' := rename ρ arg')
+         (args' := map (rename ρ) args').
+  + auto.
+  + auto.
+  + change (All2 (pred1 Σ) (map (rename ρ) args) (map (rename ρ) args')).
+    rewrite All2_map. revert H2. apply All2_consequence. firstorder.
+  + now simpl_subst.
 - econstructor ; eassumption.
 - reflexivity.
 - reflexivity.
@@ -223,13 +234,15 @@ Qed.
   Proper (pred1_subst Σ ==> pred1 Σ ==> pred1 Σ) (@substitute s s').
 Proof.
 intros σ σ' Hσ t t' Ht. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
-- cbn.
-  assert (substitute (scomp (scons x arg' sid) σ') body' =
-          substitute (scons x (substitute σ' arg') sid) (substitute (sup x σ') body')) as ->.
-  { simpl_subst. f_equal. subst_ext i. depelim i ; simpl_subst ; reflexivity. }
-  eapply pred1_app_beta ; eauto.
+- apply pred1_app_beta_alt
+    with (body' := substitute (sup x σ') body')
+         (arg' := substitute σ' arg')
+         (args' := map (substitute σ') args').
   + apply IHHt1. now apply pred1_sup.
-  + rewrite All2_map. revert H0. apply All2_consequence. firstorder.
+  + now apply IHHt2.
+  + change (All2 (pred1 Σ) (map (substitute σ) args) (map (substitute σ') args')).
+    rewrite All2_map. revert H0. apply All2_consequence. firstorder.
+  + now simpl_subst.
 - econstructor ; eauto.
 - reflexivity.
 - apply Hσ.
@@ -246,7 +259,7 @@ Qed.
 
 (** Two terms are joinable if they have a common reduct for [pred1]. *)
 Definition joinable {s} Σ (t1 t2 : term s) : Prop :=
-  exists u, Σ |- t1 >> u /\ Σ |- t2 >> u.
+  exists u, Σ ⊢ t1 >> u /\ Σ ⊢ t2 >> u.
 
 #[export] Instance joinable_Reflexive s Σ :
   Reflexive (@joinable s Σ).
@@ -258,7 +271,7 @@ Proof. intros t1 t2. unfold joinable. firstorder. Qed.
 
 (** Two substitutions are joinable if they are pointwise joinable. *)
 Definition joinable_subst {s s'} Σ (σ1 σ2 : subst s s') : Prop :=
-  exists σ, Σ |- σ1 >>ₛ σ /\ Σ |- σ2 >>ₛ σ.
+  exists σ, Σ ⊢ σ1 >>ₛ σ /\ Σ ⊢ σ2 >>ₛ σ.
 
 #[export] Instance joinable_subst_Reflexive s s' Σ :
   Reflexive (@joinable_subst s s' Σ).
@@ -355,7 +368,7 @@ Qed.
 
 (** [pred1] has the diamond property. *)
 Lemma pred1_diamond {s} Σ (t u1 u2 : term s) :
-  Σ |- t >> u1 -> Σ |- t >> u2 -> joinable Σ u1 u2.
+  Σ ⊢ t >> u1 -> Σ ⊢ t >> u2 -> joinable Σ u1 u2.
 Proof.
 intros H1 H2. depind H1 ; depelim H2 ; try reflexivity.
 - apply joinable_app ; [apply joinable_substitute ; [| apply joinable_scons] |].
@@ -394,9 +407,9 @@ Proof. apply diamond_confluence. intros t u1 u2. apply pred1_diamond. Qed.
 
 (** Confluence for [red] is an immediate result of the confluence for [pred1]. *)
 Lemma red_confluence {s} Σ (t u1 u2 : term s) :
-  Σ |- t ~> u1 ->
-  Σ |- t ~> u2 ->
-  exists v, Σ |- u1 ~> v /\ Σ |- u2 ~> v.
+  Σ ⊢ t ~> u1 ->
+  Σ ⊢ t ~> u2 ->
+  exists v, Σ ⊢ u1 ~> v /\ Σ ⊢ u2 ~> v.
 Proof.
 intros H1 H2. rewrite red_is_pred in H1, H2.
 pose proof (H := pred1_confluence Σ t u1 u2 H1 H2).
