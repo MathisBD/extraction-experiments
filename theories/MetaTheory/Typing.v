@@ -5,6 +5,8 @@ From Metaprog Require Export Data.Context MetaTheory.Conversion.
     properties, notably:
     - Compatibility with renaming and substitution.
     - Inversion lemmas.
+    - The validity lemma: in any typing derivation the type is itself well-typed.
+    - Uniqueness of types up to conversion.
 
     This module also defines a notion of typing for various data-types
     such as contexts, evar-maps, renamings, and substitutions.
@@ -15,64 +17,62 @@ From Metaprog Require Export Data.Context MetaTheory.Conversion.
 (***********************************************************************)
 
 Section All_spine.
-  Context (P : forall s, evar_map -> context ∅ s -> term s -> term s -> Prop).
+  Context {s : scope}.
+  Context (P : term s -> term s -> Prop).
 
   (** [All_spine] lifts a typing relation [P] to a spine of arguments. If [P] is [typing],
-      then [All_spine Σ Γ f_ty args T] means that appling a function of type [f_ty]
+      then [All_spine P f_ty args T] means that appling a function of type [f_ty]
       to the list of arguments [args] yields a term of type [T]. *)
-  Inductive All_spine {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> list (term s) -> term s -> Prop :=
-  | All_spine_nil f_ty f_ty' :
-      Σ ⊢ f_ty ≡ f_ty' ->
-      All_spine Σ Γ f_ty [] f_ty'
+  Inductive All_spine : term s -> list (term s) -> term s -> Prop :=
+  | All_spine_nil f_ty : All_spine f_ty [] f_ty
 
-  | All_spine_cons f_ty x a b arg args T :
-      P s Σ Γ (TProd x a b) TType ->
-      Σ ⊢ f_ty ≡ TProd x a b ->
-      P s Σ Γ arg a ->
-      All_spine Σ Γ (b[x := arg]) args T ->
-      All_spine Σ Γ f_ty (arg :: args) T.
+  | All_spine_cons x a b arg args T :
+      (*P (TProd x a b) TType ->
+      Σ ⊢ f_ty ≡ TProd x a b ->*)
+      P arg a ->
+      All_spine (b[x := arg]) args T ->
+      All_spine (TProd x a b) (arg :: args) T.
 End All_spine.
 
 Derive Signature for All_spine.
 
-Lemma All_spine_consequence (P Q : forall s, evar_map -> context ∅ s -> term s -> term s -> Prop) :
-  (forall s Σ Γ t T, P s Σ Γ t T -> Q s Σ Γ t T) ->
-  forall s Σ Γ f_ty args (T : term s),
-    All_spine P Σ Γ f_ty args T ->
-    All_spine Q Σ Γ f_ty args T.
+Lemma All_spine_consequence {s} (P Q : term s -> term s -> Prop) :
+  (forall t T, P t T -> Q t T) ->
+  forall f_ty args (T : term s),
+    All_spine P f_ty args T ->
+    All_spine Q f_ty args T.
 Proof.
-intros Himpl s Σ Γ f_ty args T H. induction H ; econstructor ; eauto.
+intros Himpl f_ty args T H. induction H ; econstructor ; eauto.
 Qed.
 
-Lemma All_spine_conv_type P {s} Σ Γ f_ty args (T T' : term s) :
-  All_spine P Σ Γ f_ty args T ->
+(*Lemma All_spine_conv_type {s} Σ P f_ty args (T T' : term s) :
+  All_spine Σ P f_ty args T ->
   Σ ⊢ T ≡ T' ->
-  All_spine P Σ Γ f_ty args T'.
+  P T' TType ->
+  All_spine Σ P f_ty args T'.
 Proof.
 intros H. induction H.
-- intros H1. constructor. now rewrite <-H1.
-- intros H3. econstructor ; eauto.
+- intros H1 H2. constructor ; [now rewrite <-H1 | assumption].
+- intros H3 H4. econstructor ; eauto.
 Qed.
 
-Lemma All_spine_conv_func_type P {s} Σ Γ f_ty f_ty' args (T : term s) :
-  All_spine P Σ Γ f_ty args T ->
+Lemma All_spine_conv_func_type {s} Σ P f_ty f_ty' args (T : term s) :
+  All_spine Σ P f_ty args T ->
   Σ ⊢ f_ty ≡ f_ty' ->
-  All_spine P Σ Γ f_ty' args T.
+  All_spine Σ P f_ty' args T.
 Proof.
 intros H. induction H.
-- intros H1. constructor. now rewrite <-H1.
+- intros H1. constructor ; [now rewrite <-H1 | assumption].
 - intros H3. econstructor ; eauto. now rewrite <-H3.
 Qed.
 
-#[export] Instance All_spine_proper_conv_type P s Σ Γ :
-  Proper (conv Σ ==> eq ==> conv Σ ==> iff) (@All_spine s P Σ Γ).
+#[export] Instance All_spine_proper_conv_func_type s Σ P :
+  Proper (conv Σ ==> eq ==> eq ==> iff) (@All_spine s Σ P).
 Proof.
-intros f_ty f_ty' Hfty args args' <- T T' HT. split ; intros H.
-- revert HT. apply All_spine_conv_type.
-  revert Hfty. now apply All_spine_conv_func_type.
-- symmetry in HT, Hfty. revert HT. apply All_spine_conv_type.
-  revert Hfty. now apply All_spine_conv_func_type.
-Qed.
+intros f_ty f_ty' Hfty args args' <- T T' <-. split ; intros H.
+- revert Hfty. now apply All_spine_conv_func_type.
+- symmetry in Hfty. revert Hfty. now apply All_spine_conv_func_type.
+Qed.*)
 
 (***********************************************************************)
 (** * Typing relation. *)
@@ -105,7 +105,7 @@ Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> 
 
 | typing_app f f_ty args T :
     Σ ;; Γ ⊢ f : f_ty ->
-    All_spine (@typing) Σ Γ f_ty args T ->
+    All_spine (typing Σ Γ) f_ty args T ->
     Σ ;; Γ ⊢ TApp f args : T
 
 | typing_evar ev entry :
@@ -156,6 +156,8 @@ Inductive typing_context (Σ : evar_map) : forall {s}, context ∅ s -> Prop :=
     Σ ;; Γ ⊢ ty : TType ->
     typing_context Σ (CCons Γ x ty).
 
+Derive Signature for typing_context.
+
 (***********************************************************************)
 (** * Typing evar-maps. *)
 (***********************************************************************)
@@ -203,9 +205,7 @@ Lemma typing_ind
     P s Σ Γ (TProd x a b) TType)
   (Happ : forall s Σ Γ f f_ty args T,
     Σ ;; Γ ⊢ f : f_ty -> P s Σ Γ f f_ty ->
-    (*is_TApp f = false ->*)
-    (*args <> [] ->*)
-    All_spine (fun s Σ Γ t T => Σ ;; Γ ⊢ t : T /\ P s Σ Γ t T) Σ Γ f_ty args T ->
+    All_spine (fun t T => Σ ;; Γ ⊢ t : T /\ P s Σ Γ t T) f_ty args T ->
     P s Σ Γ (TApp f args) T)
   (Hevar : forall s Σ Γ ev entry,
     Σ ev = Some entry ->
@@ -224,11 +224,8 @@ fix IH 6. intros s Σ Γ t T H. depelim H.
 - apply Hprod ; auto.
 - apply Happ with f_ty ; auto. clear f H. revert f_ty args T H0.
   fix IHspine 4. intros f_ty args T H0. destruct H0.
-  + constructor. assumption.
-  + econstructor ; [| eassumption | |].
-    * split ; [assumption |]. now apply IH.
-    * split ; [assumption |]. apply IH. assumption.
-    * apply IHspine ; auto.
+  + constructor.
+  + econstructor ; eauto.
 - apply Hevar ; auto.
 - eapply Hconv_type ; eauto.
 Qed.
@@ -302,23 +299,27 @@ Proof. intros H. eapply typing_prod_inv_aux ; eauto. Qed.
 Lemma typing_app_inv_aux {s} Σ Γ t (T : term s) :
   Σ ;; Γ ⊢ t : T ->
   forall f args, t = TApp f args ->
-  exists f_ty,
+  exists f_ty T',
     Σ ;; Γ ⊢ f : f_ty /\
-    All_spine (@typing) Σ Γ f_ty args T.
+    All_spine (typing Σ Γ) f_ty args T' /\
+    Σ ⊢ T' ≡ T.
 Proof.
 intros H. induction H ; intros f' args' Ht ; depelim Ht.
-- exists f_ty. split ; auto. revert H0.
-  apply All_spine_consequence. clear. firstorder.
-- destruct (IHtyping1 f' args' eq_refl) as (f_ty' & Hf & H3).
-  exists f_ty'. split ; auto. clear IHtyping1 IHtyping2 H H1 Hf.
-  depind H3 ; econstructor ; eauto. now rewrite H.
+- assert (H1 : All_spine (typing Σ Γ) f_ty args T).
+  { revert H0. apply All_spine_consequence. firstorder. }
+  clear IHtyping H0. exists f_ty, T. now split3.
+- destruct (IHtyping1 f' args' eq_refl) as (f_ty' & T' & Hf & H3).
+  exists f_ty', T'. split3 ; auto.
+  + apply H3.
+  + rewrite <-H0. apply H3.
 Qed.
 
 Lemma typing_app_inv {s} Σ Γ f args (T : term s) :
   Σ ;; Γ ⊢ TApp f args : T ->
-  exists f_ty,
+  exists f_ty T',
     Σ ;; Γ ⊢ f : f_ty /\
-    All_spine (@typing) Σ Γ f_ty args T.
+    All_spine (typing Σ Γ) f_ty args T' /\
+    Σ ⊢ T' ≡ T.
 Proof. intros H. eapply typing_app_inv_aux ; eauto. Qed.
 
 Lemma typing_evar_inv {s} Σ Γ ev (T : term s) :
@@ -390,8 +391,6 @@ intros Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
   + clear IHHt Ht. depind H ; cbn ; [constructor ; now rewrite H |].
     apply All_spine_cons with (x := x) (a := rename ρ a) (b := rename (rup x ρ) b).
     * simpl_subst in H. now apply H.
-    * rewrite H0. now simpl_subst.
-    * now apply H1.
     * simpl_subst. simpl_subst in IHAll_spine. apply IHAll_spine ; auto.
 - now apply typing_evar.
 - apply typing_conv_type with (A := rename ρ A) ; auto. now rewrite H.
@@ -454,8 +453,6 @@ intros Ht Hσ. induction Ht in s', σ, Δ, Hσ |- * ; simpl_subst.
   clear f Ht IHHt. depind H ; [constructor ; now rewrite H |]. cbn.
   apply All_spine_cons with (x := x) (a := substitute σ a) (b := substitute (sup x σ) b).
   + simpl_subst in H. now apply H.
-  + rewrite H0. simpl_subst. reflexivity.
-  + now apply H1.
   + simpl_subst. simpl_subst in IHAll_spine. now apply IHAll_spine.
 - econstructor ; eauto.
 - eapply typing_conv_type ; eauto. now rewrite H.
@@ -506,15 +503,79 @@ Lemma typing_evar_type Σ entry :
   Σ ;; CNil ⊢ entry.(evar_type) : TType.
 Proof. intros H. destruct H ; cbn ; assumption. Qed.
 
-(** This lemma is subsumed by the more general lemma [typing_type_ok]. *)
-Lemma typing_evar_type_ok {s} Σ Γ ev (T : term s) :
+(***********************************************************************)
+(** * Validity lemma. *)
+(***********************************************************************)
+
+(** The validity lemma for typing states that in any typing derivation,
+    the type is well-typed. *)
+Lemma typing_validity {s} Σ Γ (t T : term s) :
   typing_evar_map Σ ->
-  Σ ;; Γ ⊢ TEvar ev : T ->
+  typing_context Σ Γ ->
+  Σ ;; Γ ⊢ t : T ->
   Σ ;; Γ ⊢ T : TType.
 Proof.
-intros HΣ H. depind H.
+intros HΣ HΓ H. induction H.
+- constructor.
+- rewrite <-H. now apply typing_lookup_context.
+- constructor ; auto. apply IHtyping2 ; auto. now constructor.
+- constructor.
+- specialize (IHtyping HΣ HΓ).
+  assert (H1 : All_spine (fun t T => Σ ;; Γ ⊢ t : T /\ Σ ;; Γ ⊢ T : TType) f_ty args T).
+  { revert H0. apply All_spine_consequence. firstorder. }
+  clear H H0. induction H1.
+  + assumption.
+  + apply IHAll_spine. apply typing_prod_inv in IHtyping.
+    destruct IHtyping as (_ & Ha & Hb). change TType with (TType[x := arg]).
+    eapply typing_substitute ; eauto. apply typing_scons ; [|apply typing_sid].
+    simpl_subst. apply H.
 - change TType with (@wk ∅ s _ TType). unfold wk. eapply typing_rename.
-  + apply typing_evar_type. apply (HΣ ev entry H).
+  + apply typing_evar_type. now apply (HΣ ev).
   + intros i. depelim i.
 - assumption.
+Qed.
+
+(*(** This is a more powerful version of rule [typing_conv_type']: it does not
+    require proving that the new type [B] is well-typed. *)
+Lemma typing_conv_type' {s} Σ Γ (t A B : term s) :
+  Σ ;; Γ ⊢ t : A ->
+  Σ ⊢ A ≡ B ->
+  Σ ;; Γ ⊢ t : B.
+Proof.
+intros Ht Hconv. eapply typing_conv_type.
+- eassumption.
+- assumption.
+- eapply
+*)
+(* Actually this needs compatibility of typing with conversion... *)
+
+(***********************************************************************)
+(** * Uniqueness of types. *)
+(***********************************************************************)
+
+(** Types are unique (up to convertibility). This lemma will no longer be true
+    once we add subtyping (with universes). *)
+Lemma typing_unique_type {s} Σ Γ (t A A' : term s) :
+  Σ ;; Γ ⊢ t : A ->
+  Σ ;; Γ ⊢ t : A' ->
+  Σ ⊢ A ≡ A'.
+Proof.
+intros HA. revert A'. induction HA ; intros A' HA'.
+- apply typing_type_inv in HA'. now symmetry.
+- subst. apply typing_var_inv in HA'. now symmetry.
+- apply typing_lam_inv in HA'. destruct HA' as (body_ty' & HA' & Hty & Hbody).
+  rewrite HA'. f_equiv. apply IHHA2. assumption.
+- apply typing_prod_inv in HA'. now symmetry.
+- apply typing_app_inv in HA'. destruct HA' as (f_ty' & T' & Hf' & Hspine & H1).
+  apply IHHA in Hf'. rewrite <-H1.
+  assert (H2 : All_spine (typing Σ Γ) f_ty args T).
+  { revert H. apply All_spine_consequence. firstorder. }
+  clear A' H1 IHHA H HA. induction args in f_ty, f_ty', Hf', Hspine, H2 |- *.
+  + depelim Hspine ; depelim H2. assumption.
+  + depelim Hspine ; depelim H2. eapply IHargs ; [| eassumption.. ].
+    assert (x0 = x) as ->. { destruct x0 ; destruct x ; reflexivity. }
+    apply conv_substitute. now apply conv_prod_inv in Hf'.
+- apply typing_evar_inv in HA'. destruct HA' as (entry' & Hentry & HA').
+  rewrite H in Hentry. depelim Hentry. now symmetry.
+- rewrite <-H. now apply IHHA1.
 Qed.
