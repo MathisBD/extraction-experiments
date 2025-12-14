@@ -78,10 +78,10 @@ Qed.*)
 (** * Typing relation. *)
 (***********************************************************************)
 
+Unset Elimination Schemes.
+
 Reserved Notation "Σ ;; Γ ⊢ t : T"
   (at level 50, no associativity, Γ at next level, t at next level, T at next level).
-
-Unset Elimination Schemes.
 
 (** [Σ ;; Γ ⊢ t : T] means that [t] has type [T] under context [Γ] in evar-map [Σ]. *)
 Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> Prop :=
@@ -89,7 +89,15 @@ Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> 
 | typing_type :
     Σ ;; Γ ⊢ TType : TType
 
+(*| typing_var_zero {s} (Γ : context ∅ s) x ty :
+    Σ ;; CCons Γ x ty ⊢ TVar I0 : wk ty
+
+| typing_var_succ {s} (Γ : context ∅ s) x ty i :
+    Σ ;; Γ ⊢ TVar i : ty ->
+    Σ ;; CCons Γ x ty ⊢ TVar (IS i) : wk ty*)
+
 | typing_var i ty :
+    Σ ;; Γ ⊢ ty : TType ->
     lookup_context i Γ = ty ->
     Σ ;; Γ ⊢ TVar i : ty
 
@@ -194,7 +202,10 @@ Definition typing_evar_map (Σ : evar_map) :=
 Lemma typing_ind
   (P : forall s, evar_map -> context ∅ s -> term s -> term s -> Prop)
   (Htype : forall s Σ Γ, P s Σ Γ TType TType)
-  (Hvar : forall s Σ Γ i ty, lookup_context i Γ = ty -> P s Σ Γ (TVar i) ty)
+  (Hvar : forall s Σ Γ i ty,
+    Σ ;; Γ ⊢ ty : TType -> P s Σ Γ ty TType ->
+    lookup_context i Γ = ty ->
+    P s Σ Γ (TVar i) ty)
   (Hlam : forall s Σ Γ x ty body body_ty,
     Σ ;; Γ ⊢ ty : TType -> P s Σ Γ ty TType ->
     Σ ;; CCons Γ x ty ⊢ body : body_ty -> P (s ▷ x) Σ (CCons Γ x ty) body body_ty ->
@@ -219,7 +230,7 @@ Lemma typing_ind
 Proof.
 fix IH 6. intros s Σ Γ t T H. depelim H.
 - apply Htype.
-- now apply Hvar.
+- apply Hvar ; auto.
 - apply Hlam ; auto.
 - apply Hprod ; auto.
 - apply Happ with f_ty ; auto. clear f H. revert f_ty args T H0.
@@ -249,11 +260,12 @@ Qed.
 
 Lemma typing_var_inv {s} Σ Γ (i : index s) T :
   Σ ;; Γ ⊢ TVar i : T ->
-  Σ ⊢ T ≡ lookup_context i Γ.
+  Σ ⊢ T ≡ lookup_context i Γ /\
+  Σ ;; Γ ⊢ T : TType.
 Proof.
 intros H. depind H.
-- now rewrite H.
-- now rewrite <-H0.
+- now rewrite H0.
+- split ; auto. now rewrite <-H0.
 Qed.
 
 Lemma typing_lam_inv_aux {s x} Σ Γ (t : term s) T :
@@ -377,13 +389,14 @@ Qed.
 
 (** Compatibility of typing with renamings *)
 Lemma typing_rename {s s'} Σ Γ Δ (ρ : ren s s') t T :
+  typing_context Σ Δ ->
   Σ ;; Γ ⊢ t : T ->
   Σ ;; Γ ⊢ᵣ ρ : Δ ->
   Σ ;; Δ ⊢ rename ρ t : rename ρ T.
 Proof.
-intros Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
+intros HΔ Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
 - apply typing_type.
-- rewrite <-H, Hρ. now constructor.
+- rewrite <-H, Hρ. constructor ; auto.
 - apply typing_lam ; auto using typing_rup.
 - apply typing_prod ; auto using typing_rup.
 - eapply typing_app.

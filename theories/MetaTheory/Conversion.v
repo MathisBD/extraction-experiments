@@ -13,7 +13,7 @@ Reserved Notation "Γ ⊢ t ≡ u"
 
 (** Conversion relation, defined as the smallest equivalence relation containing [red1]. *)
 Inductive conv {s} Σ : term s -> term s -> Prop :=
-| conv_of_red1 t1 t2 : Σ ⊢ t1 ~>₁ t2 -> Σ ⊢ t1 ≡ t2
+| conv_of_red1 t1 t2 : Σ ⊢ t1 ~> t2 -> Σ ⊢ t1 ≡ t2
 | conv_refl t : Σ ⊢ t ≡ t
 | conv_sym t1 t2 : Σ ⊢ t1 ≡ t2 -> Σ ⊢ t2 ≡ t1
 | conv_trans t1 t2 t3 : Σ ⊢ t1 ≡ t2 -> Σ ⊢ t2 ≡ t3 -> Σ ⊢ t1 ≡ t3
@@ -32,7 +32,7 @@ Proof. intros t1 t2. apply conv_sym. Qed.
 Proof. intros t. apply conv_trans. Qed.
 
 Lemma conv_of_red {s} Σ (t u : term s) :
-  Σ ⊢ t ~> u -> Σ ⊢ t ≡ u.
+  Σ ⊢ t ~~> u -> Σ ⊢ t ≡ u.
 Proof.
 intros H. induction H.
 - reflexivity.
@@ -55,7 +55,7 @@ Proof. intros t u H. unfold Basics.flip. symmetry. now apply conv_of_red. Qed.
     We use Church-Rosser to prove inversion lemmas for [conv]. *)
 Lemma church_rosser {s} Σ (t1 t2 : term s) :
   Σ ⊢ t1 ≡ t2 <->
-  exists u, Σ ⊢ t1 ~> u /\ Σ ⊢ t2 ~> u.
+  exists u, Σ ⊢ t1 ~~> u /\ Σ ⊢ t2 ~~> u.
 Proof.
 split ; intros H.
 - depind H.
@@ -162,6 +162,7 @@ End CongruenceLemmas.
 Section InversionLemmas.
   Context {s : scope} (Σ : evar_map).
 
+  (** Injectivity of [TLam]. *)
   Lemma conv_lam_inv x (ty ty' : term s) body body' :
     Σ ⊢ TLam x ty body ≡ TLam x ty' body' ->
     Σ ⊢ ty ≡ ty' /\ Σ ⊢ body ≡ body'.
@@ -179,6 +180,7 @@ Section InversionLemmas.
     + symmetry. apply conv_of_red, Hbody2.
   Qed.
 
+  (** Injectivity of [TProd]. *)
   Lemma conv_prod_inv x (a a' : term s) b b' :
     Σ ⊢ TProd x a b ≡ TProd x a' b' ->
     Σ ⊢ a ≡ a' /\ Σ ⊢ b ≡ b'.

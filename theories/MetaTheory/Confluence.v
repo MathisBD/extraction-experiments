@@ -140,7 +140,7 @@ Proof. now apply pred1_app_beta. Qed.
 
 (** One-step reduction is included in parallel reduction. *)
 Lemma pred1_of_red1 {s} Σ (t u : term s) :
-  Σ ⊢ t ~>₁ u -> Σ ⊢ t >> u.
+  Σ ⊢ t ~> u -> Σ ⊢ t >> u.
 Proof.
 intros H. induction H.
 - apply pred1_beta.
@@ -156,7 +156,7 @@ Qed.
 
 (** Parallel reduction is included in standard reduction. *)
 Lemma red_of_pred1 {s} Σ (t u : term s) :
-  Σ ⊢ t >> u -> Σ ⊢ t ~> u.
+  Σ ⊢ t >> u -> Σ ⊢ t ~~> u.
 Proof.
 intros H. induction H.
 - rewrite <-red_beta. apply red_app_congr.
@@ -173,7 +173,7 @@ Qed.
 
 (** The reflexive closure of [pred1] is equal to [red]. *)
 Lemma red_is_pred {s} Σ (t u : term s) :
-  Σ ⊢ t ~> u <-> refl_trans_clos (pred1 Σ) t u.
+  Σ ⊢ t ~~> u <-> refl_trans_clos (pred1 Σ) t u.
 Proof.
 split ; revert t u ; apply refl_trans_clos_incl.
 - intros t u H. apply refl_trans_clos_one. now apply pred1_of_red1.
@@ -407,9 +407,9 @@ Proof. apply diamond_confluence. intros t u1 u2. apply pred1_diamond. Qed.
 
 (** Confluence for [red] is an immediate result of the confluence for [pred1]. *)
 Lemma red_confluence {s} Σ (t u1 u2 : term s) :
-  Σ ⊢ t ~> u1 ->
-  Σ ⊢ t ~> u2 ->
-  exists v, Σ ⊢ u1 ~> v /\ Σ ⊢ u2 ~> v.
+  Σ ⊢ t ~~> u1 ->
+  Σ ⊢ t ~~> u2 ->
+  exists v, Σ ⊢ u1 ~~> v /\ Σ ⊢ u2 ~~> v.
 Proof.
 intros H1 H2. rewrite red_is_pred in H1, H2.
 pose proof (H := pred1_confluence Σ t u1 u2 H1 H2).
