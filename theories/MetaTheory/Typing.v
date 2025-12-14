@@ -13,7 +13,34 @@ From Metaprog Require Export Data.Context MetaTheory.Conversion.
 *)
 
 (***********************************************************************)
-(** * Lifting a property on a spine of arguments. *)
+(** * Lifting typing on a context. *)
+(***********************************************************************)
+
+Section All_context.
+  Context (P : forall s, context ∅ s -> term s -> term s -> Prop).
+
+  (** [All_context] lifts a typing relation [P] to a context. If [P] is [typing],
+      then [All_context P Γ] means that the context [Γ] only contains well-typed terms. *)
+  Inductive All_context : forall {s}, context ∅ s -> Prop :=
+  | All_context_nil : All_context CNil
+
+  | All_context_cons {s} (Γ : context ∅ s) x ty :
+      All_context Γ ->
+      P s Γ ty TType ->
+      All_context (CCons Γ x ty).
+End All_context.
+
+Derive Signature for All_context.
+
+Lemma All_context_consequence (P Q : forall s, context ∅ s -> term s -> term s -> Prop) :
+  (forall s Γ t T, P s Γ t T -> Q s Γ t T) ->
+  forall s (Γ : context ∅ s), All_context P Γ -> All_context Q Γ.
+Proof.
+intros Himpl s Γ H. induction H ; econstructor ; eauto.
+Qed.
+
+(***********************************************************************)
+(** * Lifting typing on a spine of arguments. *)
 (***********************************************************************)
 
 Section All_spine.
@@ -84,20 +111,14 @@ Reserved Notation "Σ ;; Γ ⊢ t : T"
   (at level 50, no associativity, Γ at next level, t at next level, T at next level).
 
 (** [Σ ;; Γ ⊢ t : T] means that [t] has type [T] under context [Γ] in evar-map [Σ]. *)
-Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> Prop :=
+Inductive typing (Σ : evar_map) {s} (Γ : context ∅ s) : term s -> term s -> Prop :=
 
 | typing_type :
+    All_context (@typing Σ) Γ ->
     Σ ;; Γ ⊢ TType : TType
 
-(*| typing_var_zero {s} (Γ : context ∅ s) x ty :
-    Σ ;; CCons Γ x ty ⊢ TVar I0 : wk ty
-
-| typing_var_succ {s} (Γ : context ∅ s) x ty i :
-    Σ ;; Γ ⊢ TVar i : ty ->
-    Σ ;; CCons Γ x ty ⊢ TVar (IS i) : wk ty*)
-
 | typing_var i ty :
-    Σ ;; Γ ⊢ ty : TType ->
+    All_context (@typing Σ) Γ ->
     lookup_context i Γ = ty ->
     Σ ;; Γ ⊢ TVar i : ty
 
@@ -117,6 +138,7 @@ Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> 
     Σ ;; Γ ⊢ TApp f args : T
 
 | typing_evar ev entry :
+    All_context (@typing Σ) Γ ->
     Σ ev = Some entry ->
     Σ ;; Γ ⊢ TEvar ev : wk entry.(evar_type)
 
@@ -133,12 +155,22 @@ Set Elimination Schemes.
 Derive Signature for typing.
 
 (***********************************************************************)
+(** * Typing local contexts. *)
+(***********************************************************************)
+
+(** [typing_context Σ Γ] means that the types in context [Γ] are well-typed. *)
+Definition typing_context (Σ : evar_map) {s} (Γ : context ∅ s) :=
+  All_context (@typing Σ) Γ.
+
+(***********************************************************************)
 (** * Typing renamings and substitutions. *)
 (***********************************************************************)
 
 (** [Σ ;; Γ ⊢ᵣ ρ : Δ] means that the renaming [ρ] maps well-typed terms
     in context [Γ] to well-typed terms in context [Δ]. *)
 Definition typing_ren {s s'} (Σ : evar_map) (Γ : context ∅ s) (ρ : ren s s') (Δ : context ∅ s') :=
+  typing_context Σ Γ /\
+  typing_context Σ Δ /\
   forall i, rename ρ (lookup_context i Γ) = lookup_context (rapply ρ i) Δ.
 
 Notation "Σ ;; Γ ⊢ᵣ ρ : Δ" := (typing_ren Σ Γ ρ Δ)
@@ -147,24 +179,12 @@ Notation "Σ ;; Γ ⊢ᵣ ρ : Δ" := (typing_ren Σ Γ ρ Δ)
 (** [Σ ;; Γ ⊢ₛ σ : Δ] means that the substitution [σ] maps well-typed
     terms in context [Γ] to well-typed terms in context [Δ]. *)
 Definition typing_subst {s s'} Σ (Γ : context ∅ s) (σ : subst s s') (Δ : context ∅ s') :=
+  typing_context Σ Γ /\
+  typing_context Σ Δ /\
   forall i, Σ ;; Δ ⊢ sapply σ i : substitute σ (lookup_context i Γ).
 
 Notation "Σ ;; Γ ⊢ₛ σ : Δ" := (typing_subst Σ Γ σ Δ)
   (at level 50, Γ at next level, σ at next level, Δ at next level).
-
-(***********************************************************************)
-(** * Typing local contexts. *)
-(***********************************************************************)
-
-(** [typing_context Σ Γ] means that the types in context [Γ] are well-typed. *)
-Inductive typing_context (Σ : evar_map) : forall {s}, context ∅ s -> Prop :=
-| typing_context_nil : typing_context Σ CNil
-| typing_context_cons {s} Γ x (ty : term s) :
-    typing_context Σ Γ ->
-    Σ ;; Γ ⊢ ty : TType ->
-    typing_context Σ (CCons Γ x ty).
-
-Derive Signature for typing_context.
 
 (***********************************************************************)
 (** * Typing evar-maps. *)
@@ -200,50 +220,67 @@ Definition typing_evar_map (Σ : evar_map) :=
 
 (** Induction principle for [typing]. *)
 Lemma typing_ind
-  (P : forall s, evar_map -> context ∅ s -> term s -> term s -> Prop)
-  (Htype : forall s Σ Γ, P s Σ Γ TType TType)
+  (P : evar_map -> forall s, context ∅ s -> term s -> term s -> Prop)
+  (Htype : forall s Σ Γ,
+    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P Σ s' Γ' t T) Γ ->
+    P Σ s Γ TType TType)
   (Hvar : forall s Σ Γ i ty,
-    Σ ;; Γ ⊢ ty : TType -> P s Σ Γ ty TType ->
+    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P Σ s' Γ' t T) Γ ->
     lookup_context i Γ = ty ->
-    P s Σ Γ (TVar i) ty)
+    P Σ s Γ (TVar i) ty)
   (Hlam : forall s Σ Γ x ty body body_ty,
-    Σ ;; Γ ⊢ ty : TType -> P s Σ Γ ty TType ->
-    Σ ;; CCons Γ x ty ⊢ body : body_ty -> P (s ▷ x) Σ (CCons Γ x ty) body body_ty ->
-    P s Σ Γ (TLam x ty body) (TProd x ty body_ty))
+    Σ ;; Γ ⊢ ty : TType -> P Σ s Γ ty TType ->
+    Σ ;; CCons Γ x ty ⊢ body : body_ty -> P Σ (s ▷ x) (CCons Γ x ty) body body_ty ->
+    P Σ s Γ (TLam x ty body) (TProd x ty body_ty))
   (Hprod : forall s Σ Γ x a b,
-    Σ ;; Γ ⊢ a : TType -> P s Σ Γ a TType ->
-    Σ ;; CCons Γ x a ⊢ b : TType -> P (s ▷ x) Σ (CCons Γ x a) b TType ->
-    P s Σ Γ (TProd x a b) TType)
+    Σ ;; Γ ⊢ a : TType -> P Σ s Γ a TType ->
+    Σ ;; CCons Γ x a ⊢ b : TType -> P Σ (s ▷ x) (CCons Γ x a) b TType ->
+    P Σ s Γ (TProd x a b) TType)
   (Happ : forall s Σ Γ f f_ty args T,
-    Σ ;; Γ ⊢ f : f_ty -> P s Σ Γ f f_ty ->
-    All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ P s Σ Γ t T) f_ty args T ->
-    P s Σ Γ (TApp f args) T)
+    Σ ;; Γ ⊢ f : f_ty -> P Σ s Γ f f_ty ->
+    All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ P Σ s Γ t T) f_ty args T ->
+    P Σ s Γ (TApp f args) T)
   (Hevar : forall s Σ Γ ev entry,
+    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P Σ s' Γ' t T) Γ ->
     Σ ev = Some entry ->
-    P s Σ Γ (TEvar ev) (wk entry.(evar_type)))
+    P Σ s Γ (TEvar ev) (wk entry.(evar_type)))
   (Hconv_type : forall s Σ Γ t A B,
-    Σ ;; Γ ⊢ t : A -> P s Σ Γ t A ->
+    Σ ;; Γ ⊢ t : A -> P Σ s Γ t A ->
     Σ ⊢ A ≡ B ->
-    Σ ;; Γ ⊢ B : TType -> P s Σ Γ B TType ->
-    P s Σ Γ t B) :
-  forall s Σ Γ t T, Σ ;; Γ ⊢ t : T -> P s Σ Γ t T.
+    Σ ;; Γ ⊢ B : TType -> P Σ s Γ B TType ->
+    P Σ s Γ t B) :
+  forall Σ s Γ t T, Σ ;; Γ ⊢ t : T -> P Σ s Γ t T.
 Proof.
-fix IH 6. intros s Σ Γ t T H. depelim H.
-- apply Htype.
-- apply Hvar ; auto.
+fix IH 6. intros Σ s Γ t T H. depelim H.
+- apply Htype. revert s Γ H. fix IHctx 3. intros s Γ H. destruct H ; constructor.
+  + apply IHctx. assumption.
+  + split ; auto.
+- apply Hvar ; auto. subst. clear i. revert s Γ H. fix IHctx 3. intros s Γ H. destruct H ; constructor.
+  + apply IHctx. assumption.
+  + split ; auto.
 - apply Hlam ; auto.
 - apply Hprod ; auto.
 - apply Happ with f_ty ; auto. clear f H. revert f_ty args T H0.
   fix IHspine 4. intros f_ty args T H0. destruct H0.
   + constructor.
   + econstructor ; eauto.
-- apply Hevar ; auto.
+- apply Hevar ; auto. revert s Γ H. fix IHctx 3. intros s Γ H. destruct H ; constructor.
+  + apply IHctx. assumption.
+  + split ; auto.
 - eapply Hconv_type ; eauto.
 Qed.
 
 (***********************************************************************)
 (** * Inverting typing derivations. *)
 (***********************************************************************)
+
+Lemma typing_context_validity {s} Σ Γ (t T : term s) :
+  Σ ;; Γ ⊢ t : T ->
+  typing_context Σ Γ.
+Proof.
+intros H. induction H ; auto.
+all: revert H ; now apply All_context_consequence.
+Qed.
 
 (** Inverting typing derivations is not completely trivial:
     indeed typing looks syntax directed at first glance, but in fact
@@ -260,12 +297,11 @@ Qed.
 
 Lemma typing_var_inv {s} Σ Γ (i : index s) T :
   Σ ;; Γ ⊢ TVar i : T ->
-  Σ ⊢ T ≡ lookup_context i Γ /\
-  Σ ;; Γ ⊢ T : TType.
+  Σ ⊢ T ≡ lookup_context i Γ.
 Proof.
 intros H. depind H.
-- now rewrite H0.
-- split ; auto. now rewrite <-H0.
+- now subst.
+- now rewrite <-H0.
 Qed.
 
 Lemma typing_lam_inv_aux {s x} Σ Γ (t : term s) T :
@@ -351,23 +387,31 @@ Qed.
 (***********************************************************************)
 
 Lemma typing_rid {s} Σ (Γ : context ∅ s) :
+  typing_context Σ Γ ->
   Σ ;; Γ ⊢ᵣ rid : Γ.
-Proof. intros i. simpl_subst. reflexivity. Qed.
+Proof. intros H. split3 ; auto. intros i. simpl_subst. reflexivity. Qed.
 
 Lemma typing_rshift {s x} Σ (Γ : context ∅ s) ty :
+  typing_context Σ (CCons Γ x ty) ->
   typing_ren Σ Γ rshift (CCons Γ x ty).
 Proof.
-intros i. simpl_subst. simp lookup_context. simpl_subst. reflexivity.
+intros H. split3 ; auto. now depelim H.
 Qed.
 
 Lemma typing_rcons {s s' x} Σ (Γ : context ∅ s) (Δ : context ∅ s') i ρ ty :
+  Σ ;; Γ ⊢ ty : TType ->
   rename ρ ty = lookup_context i Δ ->
   Σ ;; Γ ⊢ᵣ ρ : Δ ->
   Σ ;; CCons Γ x ty ⊢ᵣ rcons x i ρ : Δ.
 Proof.
-intros H1 H2 j. depelim j ; simpl_subst ; simp lookup_context ; simpl_subst.
-- assumption.
-- apply H2.
+intros H1 H2 H3. split3.
+- constructor.
+  + apply H3.
+  + apply H1.
+- apply H3.
+- intros j. depelim j ; simpl_subst ; simp lookup_context ; simpl_subst.
+  + assumption.
+  + apply H3.
 Qed.
 
 Lemma typing_rcomp {s s' s''} Σ Γ Δ E (ρ1 : ren s s') (ρ2 : ren s' s'') :
@@ -375,28 +419,38 @@ Lemma typing_rcomp {s s' s''} Σ Γ Δ E (ρ1 : ren s s') (ρ2 : ren s' s'') :
   Σ ;; Δ ⊢ᵣ ρ2 : E ->
   Σ ;; Γ ⊢ᵣ rcomp ρ1 ρ2 : E.
 Proof.
-intros H1 H2 i. rewrite <-rename_rename. rewrite H1, H2. now simpl_subst.
+intros H1 H2. split3.
+- apply H1.
+- apply H2.
+- intros i. simpl_subst. rewrite <-rename_rename.
+  destruct H1 as (_ & _ & H1). rewrite H1.
+  destruct H2 as (_ & _ & H2). rewrite H2.
+  reflexivity.
 Qed.
 
 Lemma typing_rup {s s' x} Σ Γ Δ (ρ : ren s s') ty :
+  Σ ;; Γ ⊢ ty : TType ->
+  Σ ;; Δ ⊢ rename ρ ty : TType ->
   Σ ;; Γ ⊢ᵣ ρ : Δ ->
   Σ ;; CCons Γ x ty ⊢ᵣ rup x ρ : CCons Δ x (rename ρ ty).
 Proof.
-intros H. unfold rup. apply typing_rcons.
+intros H1 H2 H3. unfold rup. apply typing_rcons.
+- assumption.
 - simp lookup_context. now simpl_subst.
-- eapply typing_rcomp ; eauto. apply typing_rshift.
+- eapply typing_rcomp ; eauto. apply typing_rshift. constructor.
+  + apply H3.
+  + apply H2.
 Qed.
 
 (** Compatibility of typing with renamings *)
 Lemma typing_rename {s s'} Σ Γ Δ (ρ : ren s s') t T :
-  typing_context Σ Δ ->
   Σ ;; Γ ⊢ t : T ->
   Σ ;; Γ ⊢ᵣ ρ : Δ ->
   Σ ;; Δ ⊢ rename ρ t : rename ρ T.
 Proof.
-intros HΔ Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
-- apply typing_type.
-- rewrite <-H, Hρ. constructor ; auto.
+intros Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
+- apply typing_type. apply Hρ.
+- subst. destruct Hρ as (Hρ1 & Hρ2 & Hρ3). rewrite Hρ3. constructor ; auto.
 - apply typing_lam ; auto using typing_rup.
 - apply typing_prod ; auto using typing_rup.
 - eapply typing_app.
@@ -407,7 +461,7 @@ intros HΔ Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
     * rewrite H0. simpl_subst. reflexivity.
     * now apply H1.
     * simpl_subst. simpl_subst in IHAll_spine. apply IHAll_spine ; auto.
-- now apply typing_evar.
+- apply typing_evar ; auto. apply Hρ.
 - apply typing_conv_type with (A := rename ρ A) ; auto. now rewrite H.
 Qed.
 
@@ -416,24 +470,31 @@ Qed.
 (***********************************************************************)
 
 Lemma typing_sid {s} Σ (Γ : context ∅ s) :
+  typing_context Σ Γ ->
   Σ ;; Γ ⊢ₛ sid : Γ.
-Proof. intros i. simpl_subst. constructor. reflexivity. Qed.
+Proof. intros H. split3 ; auto. intros i. simpl_subst. now constructor. Qed.
 
 Lemma typing_sshift {s x} Σ (Γ : context ∅ s) ty :
+  typing_context Σ (CCons Γ x ty) ->
   Σ ;; Γ ⊢ₛ sshift : CCons Γ x ty.
 Proof.
-intros i. simpl_subst. constructor. simp lookup_context.
-unfold wk. cbn. simpl_subst. rewrite <-substitute_sren. reflexivity.
+intros H. split3 ; auto.
+- now depelim H.
+- simpl_subst. constructor ; auto.
 Qed.
 
 Lemma typing_scons {s s' x} Σ (Γ : context ∅ s) (Δ : context ∅ s') t σ ty :
+  Σ ;; Γ ⊢ ty : TType ->
   Σ ;; Δ ⊢ t : substitute σ ty ->
   Σ ;; Γ ⊢ₛ σ : Δ ->
   Σ ;; CCons Γ x ty ⊢ₛ scons x t σ : Δ.
 Proof.
-intros H1 H2 i. depelim i ; simpl_subst ; simp lookup_context.
-- unfold wk. cbn. simpl_subst. assumption.
-- unfold wk. cbn. simpl_subst. apply H2.
+intros H1 H2 H3. split3.
+- constructor ; auto. apply H3.
+- apply H3.
+- intros i. depelim i ; simpl_subst ; simp lookup_context.
+  + simpl_subst. assumption.
+  + simpl_subst. destruct H3 as (HΔ & HΓ & H3). apply H3.
 Qed.
 
 Lemma typing_srcomp {s s' s''} Σ Γ Δ E (σ : subst s s') (ρ : ren s' s'') :
@@ -441,17 +502,25 @@ Lemma typing_srcomp {s s' s''} Σ Γ Δ E (σ : subst s s') (ρ : ren s' s'') :
   Σ ;; Δ ⊢ᵣ ρ : E ->
   Σ ;; Γ ⊢ₛ srcomp σ ρ : E.
 Proof.
-intros H1 H2 i. simpl_subst. rewrite <-rename_substitute.
-eapply typing_rename ; [|eassumption]. apply H1.
+intros H1 H2. split3.
+- apply H1.
+- apply H2.
+- intros i. simpl_subst. rewrite <-rename_substitute.
+  eapply typing_rename ; [|eassumption]. apply H1.
 Qed.
 
 Lemma typing_sup {s s' x} Σ Γ Δ (σ : subst s s') ty :
+  Σ ;; Γ ⊢ ty : TType ->
+  Σ ;; Δ ⊢ substitute σ ty : TType ->
   Σ ;; Γ ⊢ₛ σ : Δ ->
   Σ ;; CCons Γ x ty ⊢ₛ sup x σ : CCons Δ x (substitute σ ty).
 Proof.
-intros H. unfold sup. apply typing_scons.
-- constructor. simp lookup_context. unfold wk. cbn. simpl_subst. reflexivity.
-- eapply typing_srcomp ; eauto. apply typing_rshift.
+intros H1 H2 H3. unfold sup. apply typing_scons.
+- apply H1.
+- constructor.
+  + constructor ; auto. apply H3.
+  + simp lookup_context. simpl_subst. reflexivity.
+- eapply typing_srcomp ; eauto. apply typing_rshift. constructor ; auto. apply H3.
 Qed.
 
 Lemma typing_substitute {s s'} Σ Γ Δ (σ : subst s s') t T :
@@ -460,8 +529,8 @@ Lemma typing_substitute {s s'} Σ Γ Δ (σ : subst s s') t T :
   Σ ;; Δ ⊢ substitute σ t : substitute σ T.
 Proof.
 intros Ht Hσ. induction Ht in s', σ, Δ, Hσ |- * ; simpl_subst.
-- constructor.
-- rewrite <-H. apply Hσ.
+- constructor. apply Hσ.
+- subst. apply Hσ.
 - apply typing_lam ; auto using typing_sup.
 - apply typing_prod ; auto using typing_sup.
 - apply typing_app with (f_ty := substitute σ f_ty) ; auto.
@@ -471,7 +540,7 @@ intros Ht Hσ. induction Ht in s', σ, Δ, Hσ |- * ; simpl_subst.
   + rewrite H0. simpl_subst. reflexivity.
   + now apply H1.
   + simpl_subst. simpl_subst in IHAll_spine. now apply IHAll_spine.
-- econstructor ; eauto.
+- econstructor ; eauto. apply Hσ.
 - eapply typing_conv_type ; eauto. now rewrite H.
 Qed.
 
@@ -480,9 +549,13 @@ Lemma typing_rscomp {s s' s''} Σ Γ Δ E (ρ : ren s s') (σ : subst s' s'') :
   Σ ;; Δ ⊢ₛ σ : E ->
   Σ ;; Γ ⊢ₛ rscomp ρ σ : E.
 Proof.
-intros H1 H2 i. rewrite <-substitute_rename.
-assert (sapply (rscomp ρ σ) i = substitute σ (TVar (rapply ρ i))) as -> by now simpl_subst.
-eapply typing_substitute ; eauto. rewrite H1. now constructor.
+intros H1 H2. split3.
+- apply H1.
+- apply H2.
+- intros i. rewrite <-substitute_rename.
+  assert (sapply (rscomp ρ σ) i = substitute σ (TVar (rapply ρ i))) as -> by now simpl_subst.
+  eapply typing_substitute ; eauto. destruct H1 as (_ & _ & H1). rewrite H1.
+  constructor ; auto. apply H2.
 Qed.
 
 Lemma typing_scomp {s s' s''} Σ Γ Δ E (σ1 : subst s s') (σ2 : subst s' s'') :
@@ -490,8 +563,11 @@ Lemma typing_scomp {s s' s''} Σ Γ Δ E (σ1 : subst s s') (σ2 : subst s' s'')
   Σ ;; Δ ⊢ₛ σ2 : E ->
   Σ ;; Γ ⊢ₛ scomp σ1 σ2 : E.
 Proof.
-intros H1 H2 i. simpl_subst. rewrite <-substitute_substitute.
-eapply typing_substitute ; eauto.
+intros H1 H2. split3.
+- apply H1.
+- apply H2.
+- intros i. simpl_subst. rewrite <-substitute_substitute.
+  eapply typing_substitute ; eauto. apply H1.
 Qed.
 
 (***********************************************************************)
@@ -506,9 +582,9 @@ intros H. induction H.
 - depelim i.
 - depelim i ; simp lookup_context ; simpl_subst.
   + change TType with (rename (@rshift s x) TType).
-    eapply typing_rename ; eauto. apply typing_rshift.
+    eapply typing_rename ; eauto. apply typing_rshift. constructor ; auto.
   + change TType with (rename (@rshift s x) TType).
-    eapply typing_rename ; eauto. apply typing_rshift.
+    eapply typing_rename ; eauto. apply typing_rshift. constructor ; auto.
 Qed.
 
 (***********************************************************************)
@@ -528,27 +604,32 @@ Proof. intros H. destruct H ; cbn ; assumption. Qed.
     the type is well-typed. *)
 Lemma typing_validity {s} Σ Γ (t T : term s) :
   typing_evar_map Σ ->
-  typing_context Σ Γ ->
   Σ ;; Γ ⊢ t : T ->
   Σ ;; Γ ⊢ T : TType.
 Proof.
-intros HΣ HΓ H. induction H.
-- constructor.
-- rewrite <-H. now apply typing_lookup_context.
-- constructor ; auto. apply IHtyping2 ; auto. now constructor.
-- constructor.
-- specialize (IHtyping HΣ HΓ).
+intros HΣ H. induction H.
+- constructor. revert H. apply All_context_consequence. firstorder.
+- subst. apply typing_lookup_context. revert H.
+  apply All_context_consequence. firstorder.
+- constructor ; auto.
+- constructor. eapply typing_context_validity ; eauto.
+- specialize (IHtyping HΣ).
   assert (H1 : All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ Σ ;; Γ ⊢ T : TType) f_ty args T).
   { revert H0. apply All_spine_consequence. firstorder. }
   clear H H0. induction H1.
   + assumption.
   + apply IHAll_spine. destruct H as (H & _). apply typing_prod_inv in H.
     destruct H as (_ & Ha & Hb). change TType with (TType[x := arg]).
-    eapply typing_substitute ; eauto. apply typing_scons ; [|apply typing_sid].
-    simpl_subst. apply H1.
-- change TType with (@wk ∅ s _ TType). unfold wk. eapply typing_rename.
+    eapply typing_substitute ; eauto. apply typing_scons.
+    * assumption.
+    * simpl_subst. apply H1.
+    * apply typing_sid. eapply typing_context_validity ; eauto.
+- simpl_subst. change TType with (@rename ∅ s wk_idx TType). eapply typing_rename.
   + apply typing_evar_type. now apply (HΣ ev).
-  + intros i. depelim i.
+  + split3.
+    * constructor.
+    * revert H. apply All_context_consequence. firstorder.
+    * intros i. depelim i.
 - assumption.
 Qed.
 
@@ -593,6 +674,6 @@ intros HA. revert A'. induction HA ; intros A' HA'.
     assert (x0 = x) as ->. { destruct x0 ; destruct x ; reflexivity. }
     apply conv_substitute. rewrite H0, H3 in Hf'. now apply conv_prod_inv in Hf'.
 - apply typing_evar_inv in HA'. destruct HA' as (entry' & Hentry & HA').
-  rewrite H in Hentry. depelim Hentry. now symmetry.
+  rewrite H0 in Hentry. depelim Hentry. now symmetry.
 - rewrite <-H. now apply IHHA1.
 Qed.

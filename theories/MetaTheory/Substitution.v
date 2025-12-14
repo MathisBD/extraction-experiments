@@ -1,9 +1,11 @@
 From Metaprog Require Import Prelude.
 From Metaprog Require Export Data.Term.
 
-(** This module develops the equational theory of renamings, thinnings, and substitutions,
-    i.e. sigma calculus. Note that we assume the functional extensionality axiom which
-    simplifies many lemmas.
+(** This module develops the equational theory of renamings, thinnings,
+    and substitutions, i.e. the theory of sigma calculus.
+    Note that we assume the functional extensionality axiom which
+    simplifies many lemmas and allows the tactic [simpl_subst] to be reasonably
+    efficient.
 
     We provide a few tactics to reason about renamings and substitutions:
     - [ren_ext i] and [subst_ext i] are the analogs of [fun_ext i] for renamings
@@ -33,7 +35,7 @@ intros H. depind δ.
   + specialize (H I0). simp tapply in H. depelim H.
 - depelim δ'.
   + specialize (H I0). simp tapply in H. depelim H.
-  + admit. (* Equations generates a very weird goal here. *)
+  + unfold eq_rect in H. admit. (* Equations generates a very weird goal here. *)
 Admitted.
 
 Lemma subst_ext {s s'} (σ σ' : subst s s') :
@@ -58,28 +60,25 @@ Tactic Notation "subst_ext" ident(i) := apply subst_ext ; intros i.
 Lemma ren_closed {s} (ρ : ren ∅ s) :
   ρ = wk_idx.
 Proof. ren_ext i. depelim i. Qed.
-#[export] Hint Rewrite @ren_closed : subst_alt.
 
 Lemma subst_closed {s} (σ : subst ∅ s) :
   σ = sren wk_idx.
 Proof. subst_ext i. depelim i. Qed.
-#[export] Hint Rewrite @subst_closed : subst.
 
-Ltac rewrite_ren_closed :=
+(** For some reason [ren_closed] doesn't work with [rewrite_strat].
+    We instead rewrite with it using a custom tactic. *)
+
+Ltac rewrite_ren_subst_closed :=
   match goal with
-  | |- context[ ?ρ ] => rewrite (ren_closed ρ)
+  | |- context[ ?x ] => first [ rewrite (ren_closed x) | rewrite (subst_closed x) ]
   | _ => idtac
   end.
 
-Ltac rewrite_ren_closed_in H :=
+Ltac rewrite_ren_subst_closed_in H :=
   match goal with
-  | H : context[ ?ρ ] |- _ => rewrite (ren_closed ρ) in H
+  | H : context[ ?x ] |- _ => first [ rewrite (ren_closed x) in H | rewrite (subst_closed x) in H ]
   | _ => idtac
   end.
-
-Lemma fold_wk {s s'} (t : term s) (H : ScopeIncl s s') :
-  rename wk_idx t = @wk s s' H t.
-Proof. reflexivity. Qed.
 
 (** [simpl_subst] uses the hint database [subst] to allow for easy extension.
 
@@ -87,15 +86,15 @@ Proof. reflexivity. Qed.
     because [simpl_subst] can easily loop indefinitely if we aren't careful. *)
 Ltac simpl_subst :=
   unfold wk ;
-  (repeat progress (rewrite_strat (topdown (progress (hints subst))))) ;
-  rewrite_ren_closed ;
-  (try rewrite !fold_wk).
+  repeat progress first
+    [ rewrite_strat (topdown (progress (hints subst)))
+    | rewrite_ren_subst_closed ].
 
 Ltac simpl_subst_in H :=
   unfold wk in H ;
-  (repeat progress (rewrite_strat (topdown (progress (hints subst))) in H)) ;
-  rewrite_ren_closed_in H ;
-  (try rewrite !fold_wk in H).
+  repeat progress first
+    [ rewrite_strat (topdown (progress (hints subst))) in H
+    | rewrite_ren_subst_closed_in H ].
 
 Tactic Notation "simpl_subst" "in" ident(H) :=
   simpl_subst_in H.
