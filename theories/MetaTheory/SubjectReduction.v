@@ -4,60 +4,6 @@ From Metaprog Require Export MetaTheory.Typing.
 (** This module proves the subject reduction (aka preservation) lemma:
     reducing a well-typed term doesn't change its type. *)
 
-(***********************************************************************)
-(** * Context conversion. *)
-(***********************************************************************)
-
-Inductive conv_context (Σ : evar_map) : forall {s}, context ∅ s -> context ∅ s -> Prop :=
-| conv_context_nil : conv_context Σ CNil CNil
-| conv_context_cons {s} Γ Γ' x (ty ty' : term s) :
-    conv_context Σ Γ Γ' ->
-    Σ ⊢ ty ≡ ty' ->
-    conv_context Σ (CCons Γ x ty) (CCons Γ' x ty').
-
-Derive Signature for conv_context.
-
-#[export] Instance conv_context_Reflexive s Σ : Reflexive (@conv_context Σ s).
-Proof. intros Γ. induction Γ ; now constructor. Qed.
-
-#[export] Instance conv_context_Symmetric s Σ : Symmetric (@conv_context Σ s).
-Proof. intros Γ Γ' H. induction H ; now constructor. Qed.
-
-Lemma conv_context_lookup {s} Σ Γ Γ' (i : index s) :
-  conv_context Σ Γ Γ' ->
-  Σ ⊢ lookup_context i Γ ≡ lookup_context i Γ'.
-Proof.
-intros H. induction H.
-- reflexivity.
-- depelim i ; simp lookup_context.
-  + unfold wk. now apply conv_rename.
-  + unfold wk. now apply conv_rename.
-Qed.
-
-(*Lemma aux {s} Σ Γ Γ' (i : index s) :
-  conv_context Σ Γ Γ' ->
-  typing_context Σ Γ' ->
-  Σ ;; Γ' ⊢ lookup_context i Γ : TType.
-Proof.
-intros H. induction H ; intros H' ; depelim i ; simp lookup_context ; simpl_subst.
-- change TType with (rename (@rshift s x) TType). apply typing_rename with Γ'.
-  + depelim H'. admit.
-  + apply typing_rshift.*)
-
-(*Lemma typing_conv_context {s} Σ Γ Γ' (t T : term s) :
-  Σ ;; Γ ⊢ t : T ->
-  conv_context Σ Γ Γ' ->
-  typing_context Σ Γ' ->
-  Σ ;; Γ' ⊢ t : T.
-Proof.
-intros Ht. induction Ht ; intros HΓ1 HΓ2.
-- constructor.
-- subst. apply typing_conv_type with (lookup_context i Γ').
-  + now apply typing_var.
-  + symmetry. now apply conv_context_lookup.
-  + apply H
-Admitted.*)
-
 (** Beta reduction preserves typing. *)
 Lemma typing_beta {s} Σ Γ x ty body arg args (T : term s) :
   typing_evar_map Σ ->
@@ -65,29 +11,32 @@ Lemma typing_beta {s} Σ Γ x ty body arg args (T : term s) :
   Σ ;; Γ ⊢ TApp (TLam x ty body) (arg :: args) : T ->
   Σ ;; Γ ⊢ TApp (body[x := arg]) args : T.
 Proof.
-intros HΣ HΓ H. pose proof (HT := typing_type_ok _ _ _ _ HΣ HΓ H).
+intros HΣ HΓ H. pose proof (HT := typing_validity _ _ _ _ HΣ HΓ H).
 apply typing_app_inv in H. destruct H as (f_ty & T' & H1 & H2 & H3).
 apply typing_conv_type with T' ; [|assumption..]. clear T H3 HT.
 
 apply typing_lam_inv in H1. destruct H1 as (body_ty & H1 & Hty & Hbody).
 depelim H2. assert (x0 = x) as ->. { destruct x0 ; destruct x ; reflexivity. }
-apply conv_prod_inv in H1. destruct H1 as (Ha & Hb).
-apply typing_app with (b[x := arg]). ; [|assumption].
+rewrite H0 in H1. apply conv_prod_inv in H1. clear f_ty H0. destruct H1 as (Ha & Hb).
 
+assert (Hbody' : Σ ;; Γ ⊢ body[x := arg] : body_ty[x := arg]).
+{
+  apply typing_substitute with (CCons Γ x ty) ; [assumption|].
+  apply typing_scons.
+  - simpl_subst. apply typing_conv_type with a ; auto.
+  - apply typing_sid.
+}
 
-rewrite H1 in H0. clear f_ty H1. apply conv_prod_inv in H0. destruct H0 as (Ha & Hb).
-eapply typing_app with (b[x := arg]) ; [|assumption].
-apply typing_substitute with (CCons Γ x a).
-(*- apply typing_conv_type with body_ty ; auto.
-  apply typing_prod_inv in H. apply typing_conv_context with (CCons Γ x a).
-  + apply H.
-  + admit.
-  + constructor.
-- apply typing_scons ; simpl_subst.
-  + apply typing_conv_type with a ; auto. now symmetry.
-  + apply typing_sid.
-Qed.*)
-Admitted.
+assert (Hbody'' : Σ ;; Γ ⊢ body[x := arg] : b[x := arg]).
+{
+  apply typing_conv_type with (body_ty[x := arg]) ; [assumption | |].
+  - now rewrite Hb.
+  - change TType with (TType[x := arg]). eapply typing_substitute with (CCons Γ x a).
+    + apply typing_prod_inv in H. apply H.
+    + apply typing_scons ; [|apply typing_sid]. simpl_subst. assumption.
+}
+eapply typing_app ; eauto.
+Qed.
 
 (** One-step reduction preserves typing. *)
 Lemma typing_red1 {s} Σ Γ (t u T : term s) :

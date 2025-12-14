@@ -17,30 +17,30 @@ From Metaprog Require Export Data.Context MetaTheory.Conversion.
 (***********************************************************************)
 
 Section All_spine.
-  Context {s : scope}.
+  Context {s : scope} (Σ : evar_map).
   Context (P : term s -> term s -> Prop).
 
   (** [All_spine] lifts a typing relation [P] to a spine of arguments. If [P] is [typing],
-      then [All_spine P f_ty args T] means that appling a function of type [f_ty]
+      then [All_spine Σ P f_ty args T] means that appling a function of type [f_ty]
       to the list of arguments [args] yields a term of type [T]. *)
   Inductive All_spine : term s -> list (term s) -> term s -> Prop :=
   | All_spine_nil f_ty : All_spine f_ty [] f_ty
 
-  | All_spine_cons x a b arg args T :
-      (*P (TProd x a b) TType ->
-      Σ ⊢ f_ty ≡ TProd x a b ->*)
+  | All_spine_cons f_ty x a b arg args T :
+      P (TProd x a b) TType ->
+      Σ ⊢ f_ty ≡ TProd x a b ->
       P arg a ->
       All_spine (b[x := arg]) args T ->
-      All_spine (TProd x a b) (arg :: args) T.
+      All_spine f_ty (arg :: args) T.
 End All_spine.
 
 Derive Signature for All_spine.
 
-Lemma All_spine_consequence {s} (P Q : term s -> term s -> Prop) :
+Lemma All_spine_consequence {s} Σ (P Q : term s -> term s -> Prop) :
   (forall t T, P t T -> Q t T) ->
   forall f_ty args (T : term s),
-    All_spine P f_ty args T ->
-    All_spine Q f_ty args T.
+    All_spine Σ P f_ty args T ->
+    All_spine Σ Q f_ty args T.
 Proof.
 intros Himpl f_ty args T H. induction H ; econstructor ; eauto.
 Qed.
@@ -105,7 +105,7 @@ Inductive typing {s} (Σ : evar_map) (Γ : context ∅ s) : term s -> term s -> 
 
 | typing_app f f_ty args T :
     Σ ;; Γ ⊢ f : f_ty ->
-    All_spine (typing Σ Γ) f_ty args T ->
+    All_spine Σ (typing Σ Γ) f_ty args T ->
     Σ ;; Γ ⊢ TApp f args : T
 
 | typing_evar ev entry :
@@ -205,7 +205,7 @@ Lemma typing_ind
     P s Σ Γ (TProd x a b) TType)
   (Happ : forall s Σ Γ f f_ty args T,
     Σ ;; Γ ⊢ f : f_ty -> P s Σ Γ f f_ty ->
-    All_spine (fun t T => Σ ;; Γ ⊢ t : T /\ P s Σ Γ t T) f_ty args T ->
+    All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ P s Σ Γ t T) f_ty args T ->
     P s Σ Γ (TApp f args) T)
   (Hevar : forall s Σ Γ ev entry,
     Σ ev = Some entry ->
@@ -301,11 +301,11 @@ Lemma typing_app_inv_aux {s} Σ Γ t (T : term s) :
   forall f args, t = TApp f args ->
   exists f_ty T',
     Σ ;; Γ ⊢ f : f_ty /\
-    All_spine (typing Σ Γ) f_ty args T' /\
+    All_spine Σ (typing Σ Γ) f_ty args T' /\
     Σ ⊢ T' ≡ T.
 Proof.
 intros H. induction H ; intros f' args' Ht ; depelim Ht.
-- assert (H1 : All_spine (typing Σ Γ) f_ty args T).
+- assert (H1 : All_spine Σ (typing Σ Γ) f_ty args T).
   { revert H0. apply All_spine_consequence. firstorder. }
   clear IHtyping H0. exists f_ty, T. now split3.
 - destruct (IHtyping1 f' args' eq_refl) as (f_ty' & T' & Hf & H3).
@@ -318,7 +318,7 @@ Lemma typing_app_inv {s} Σ Γ f args (T : term s) :
   Σ ;; Γ ⊢ TApp f args : T ->
   exists f_ty T',
     Σ ;; Γ ⊢ f : f_ty /\
-    All_spine (typing Σ Γ) f_ty args T' /\
+    All_spine Σ (typing Σ Γ) f_ty args T' /\
     Σ ⊢ T' ≡ T.
 Proof. intros H. eapply typing_app_inv_aux ; eauto. Qed.
 
@@ -391,6 +391,8 @@ intros Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
   + clear IHHt Ht. depind H ; cbn ; [constructor ; now rewrite H |].
     apply All_spine_cons with (x := x) (a := rename ρ a) (b := rename (rup x ρ) b).
     * simpl_subst in H. now apply H.
+    * rewrite H0. simpl_subst. reflexivity.
+    * now apply H1.
     * simpl_subst. simpl_subst in IHAll_spine. apply IHAll_spine ; auto.
 - now apply typing_evar.
 - apply typing_conv_type with (A := rename ρ A) ; auto. now rewrite H.
@@ -453,6 +455,8 @@ intros Ht Hσ. induction Ht in s', σ, Δ, Hσ |- * ; simpl_subst.
   clear f Ht IHHt. depind H ; [constructor ; now rewrite H |]. cbn.
   apply All_spine_cons with (x := x) (a := substitute σ a) (b := substitute (sup x σ) b).
   + simpl_subst in H. now apply H.
+  + rewrite H0. simpl_subst. reflexivity.
+  + now apply H1.
   + simpl_subst. simpl_subst in IHAll_spine. now apply IHAll_spine.
 - econstructor ; eauto.
 - eapply typing_conv_type ; eauto. now rewrite H.
@@ -521,14 +525,14 @@ intros HΣ HΓ H. induction H.
 - constructor ; auto. apply IHtyping2 ; auto. now constructor.
 - constructor.
 - specialize (IHtyping HΣ HΓ).
-  assert (H1 : All_spine (fun t T => Σ ;; Γ ⊢ t : T /\ Σ ;; Γ ⊢ T : TType) f_ty args T).
+  assert (H1 : All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ Σ ;; Γ ⊢ T : TType) f_ty args T).
   { revert H0. apply All_spine_consequence. firstorder. }
   clear H H0. induction H1.
   + assumption.
-  + apply IHAll_spine. apply typing_prod_inv in IHtyping.
-    destruct IHtyping as (_ & Ha & Hb). change TType with (TType[x := arg]).
+  + apply IHAll_spine. destruct H as (H & _). apply typing_prod_inv in H.
+    destruct H as (_ & Ha & Hb). change TType with (TType[x := arg]).
     eapply typing_substitute ; eauto. apply typing_scons ; [|apply typing_sid].
-    simpl_subst. apply H.
+    simpl_subst. apply H1.
 - change TType with (@wk ∅ s _ TType). unfold wk. eapply typing_rename.
   + apply typing_evar_type. now apply (HΣ ev).
   + intros i. depelim i.
@@ -568,13 +572,13 @@ intros HA. revert A'. induction HA ; intros A' HA'.
 - apply typing_prod_inv in HA'. now symmetry.
 - apply typing_app_inv in HA'. destruct HA' as (f_ty' & T' & Hf' & Hspine & H1).
   apply IHHA in Hf'. rewrite <-H1.
-  assert (H2 : All_spine (typing Σ Γ) f_ty args T).
+  assert (H2 : All_spine Σ (typing Σ Γ) f_ty args T).
   { revert H. apply All_spine_consequence. firstorder. }
   clear A' H1 IHHA H HA. induction args in f_ty, f_ty', Hf', Hspine, H2 |- *.
   + depelim Hspine ; depelim H2. assumption.
   + depelim Hspine ; depelim H2. eapply IHargs ; [| eassumption.. ].
     assert (x0 = x) as ->. { destruct x0 ; destruct x ; reflexivity. }
-    apply conv_substitute. now apply conv_prod_inv in Hf'.
+    apply conv_substitute. rewrite H0, H3 in Hf'. now apply conv_prod_inv in Hf'.
 - apply typing_evar_inv in HA'. destruct HA' as (entry' & Hentry & HA').
   rewrite H in Hentry. depelim Hentry. now symmetry.
 - rewrite <-H. now apply IHHA1.
