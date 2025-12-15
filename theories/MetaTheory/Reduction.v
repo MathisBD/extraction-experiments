@@ -113,17 +113,28 @@ Reserved Notation "Σ ⊢ t ~~> u"
 
 (** Strong reduction relation, defined as the reflexive-transitive closure of [red1]. *)
 Inductive red {s} (Σ : evar_map) : term s -> term s -> Prop :=
-| red_of_red1 t1 t2 : Σ ⊢ t1 ~> t2 -> Σ ⊢ t1 ~~> t2
 | red_refl t : Σ ⊢ t ~~> t
-| red_trans t1 t2 t3 : Σ ⊢ t1 ~~> t2 -> Σ ⊢ t2 ~~> t3 -> Σ ⊢ t1 ~~> t3
+| red_step t1 t2 t3 : Σ ⊢ t1 ~~> t2 -> Σ ⊢ t2 ~> t3 -> Σ ⊢ t1 ~~> t3
 
 where  "Σ ⊢ t ~~> u" := (red Σ t u).
+
+Derive Signature for red.
 
 #[export] Instance red_Reflexive s Σ : Reflexive (@red s Σ).
 Proof. intros t. apply red_refl. Qed.
 
 #[export] Instance red_Transitive s Σ : Transitive (@red s Σ).
-Proof. intros t1 t2 t3 H1 H2. eapply red_trans ; eauto. Qed.
+Proof.
+intros t1 t2 t3 H1 H2. induction H2.
+- assumption.
+- apply red_step with t2 ; auto.
+Qed.
+
+Lemma red_of_red1 {s} Σ (t u : term s) :
+  Σ ⊢ t ~> u -> Σ ⊢ t ~~> u.
+Proof.
+intros H. apply red_step with t ; auto. reflexivity.
+Qed.
 
 #[export] Instance subrelation_red1_red s Σ :
   subrelation (@red1 s Σ) (@red s Σ).
@@ -161,8 +172,15 @@ Section CongruenceLemmas.
     Proper (eq ==> red1 Σ ==> red1 Σ) (@TProd s x).
   Proof. intros ty ty' <- body body' Hbody. now apply red1_prod_r. Qed.
 
+  #[export] Instance red1_app_congr_l :
+    Proper (red1 Σ ==> eq ==> red1 Σ) (@TApp s).
+  Proof. intros f f' Hf args args' <-. now apply red1_app_l. Qed.
 
+  #[export] Instance red1_app_congr_r :
+    Proper (eq ==> OnOne2 (red1 Σ) ==> red1 Σ) (@TApp s).
+  Proof. intros f f' <- args args' Hargs. now apply red1_app_r. Qed.
 
+End CongruenceLemmas.
 
 (***********************************************************************)
 (** * Congruence lemmas for [red]. *)
@@ -171,10 +189,10 @@ Section CongruenceLemmas.
 Section CongruenceLemmas.
   Context {s : scope} (Σ : evar_map).
 
-  Lemma red1_beta_alt x (ty : term s) body arg args t :
+  Lemma red_beta_alt x (ty : term s) body arg args t :
     t = TApp (body[x := arg]) args ->
-    Σ ⊢ TApp (TLam x ty body) (arg :: args) ~> t.
-  Proof. intros ->. apply red1_beta. Qed.
+    Σ ⊢ TApp (TLam x ty body) (arg :: args) ~~> t.
+  Proof. intros ->. apply red_of_red1, red1_beta. Qed.
 
   Lemma red_beta x (ty : term s) body arg args :
     Σ ⊢ TApp (TLam x ty body) (arg :: args) ~~> TApp (body[x := arg]) args.
@@ -190,23 +208,23 @@ Section CongruenceLemmas.
   Proof.
   intros ty ty' Hty body body' Hbody. transitivity (TLam x ty body').
   - clear Hty. induction Hbody.
-    + rewrite H. reflexivity.
-    + rewrite IHr ; [|now constructor]. now apply red_of_red1, red1_lam_r.
-  - clear Hbody. induction (red_prop Hty).
     + reflexivity.
-    + rewrite IHr ; [|now constructor]. now apply red_of_red1, red1_lam_l.
+    + now rewrite <-H.
+  - clear Hbody. induction Hty.
+    + reflexivity.
+    + now rewrite <-H.
   Qed.
 
   #[export] Instance red_prod_congr x :
     Proper (red Σ ==> red Σ ==> red Σ) (@TProd s x).
   Proof.
   intros a a' Ha b b' Hb. transitivity (TProd x a b').
-  - clear Ha. induction (red_prop Hb).
+  - clear Ha. induction Hb.
     + reflexivity.
-    + rewrite IHr ; [| now constructor]. now apply red_of_red1, red1_prod_r.
-  - clear Hb. induction (red_prop Ha).
+    + now rewrite <-H.
+  - clear Hb. induction Ha.
     + reflexivity.
-    + rewrite IHr ; [| now constructor]. now apply red_of_red1, red1_prod_l.
+    + now rewrite <-H.
   Qed.
 
   Lemma red_app_congr_aux (f : term s) l (args args' : list (term s)) :
@@ -216,10 +234,9 @@ Section CongruenceLemmas.
   intros H. revert f l. depind H ; intros f l.
   - reflexivity.
   - transitivity (TApp f (l ++ y :: xs)).
-    + clear IHAll2 H0. induction (red_prop H).
+    + clear IHAll2 H0. induction H.
       * reflexivity.
-      * rewrite IHr ; [| now constructor]. apply red_of_red1, red1_app_r.
-        now apply OnOne2_app_r, OnOne2_head.
+      * rewrite IHred. apply red_of_red1. f_equiv. now apply OnOne2_app_r, OnOne2_head.
     + specialize (IHAll2 f (l ++ [y])). rewrite <-!app_assoc in IHAll2.
       cbn in IHAll2. exact IHAll2.
   Qed.
@@ -228,9 +245,9 @@ Section CongruenceLemmas.
     Proper (red Σ ==> All2 (red Σ) ==> red Σ) (@TApp s).
   Proof.
   intros f f' Hf args arg' Hargs. transitivity (TApp f' args).
-  - clear Hargs. induction (red_prop Hf).
+  - clear Hargs. induction Hf.
     + reflexivity.
-    + rewrite IHr ; [| now constructor]. now apply red_of_red1, red1_app_l.
+    + now rewrite <-H.
   - clear f Hf. apply red_app_congr_aux with (l := []). assumption.
   Qed.
 
@@ -246,9 +263,9 @@ Section InversionLemmas.
   Lemma red_type_inv (t : term s) :
     Σ ⊢ TType ~~> t -> t = TType.
   Proof.
-  intros H. pose proof (H' := red_prop H). depind H'.
+  intros H. depind H.
   - reflexivity.
-  - rewrite IHH' in *. ; [| now constructor]. depelim H0.
+  - subst. depelim H0.
   Qed.
 
   Lemma red_var_inv (i : index s) (t : term s) :
@@ -305,10 +322,6 @@ Record sred {s s'} Σ (σ σ' : subst s s') := {
   sred_prop : forall i, Σ ⊢ sapply σ i ~~> sapply σ' i
 }.
 
-(* #[export] Instance sred1_sred_subrelation s s' Σ :
-  subrelation (@sred1 s s' Σ) (@sred s s' Σ).
-Proof. intros σ σ' [Hσ]. constructor. intros i. now rewrite Hσ. Qed.*)
-
 #[export] Instance sred_Reflexive s s' Σ : Reflexive (@sred s s' Σ).
 Proof. intros σ. constructor. reflexivity. Qed.
 
@@ -325,81 +338,99 @@ Proof. intros σ σ' [Hσ] i ? <-. apply Hσ. Qed.
 (** * Compatibility with renaming and substitution. *)
 (***********************************************************************)
 
-Section SubstitutionLemma.
-  Context {s s' s'' : scope} {x : tag} (Σ : evar_map).
+(** Compatibility of renaming with [red1]. *)
+#[export] Instance red1_rename {Σ s s'} (ρ : ren s s') :
+  Proper (red1 Σ ==> red1 Σ) (rename ρ).
+Proof.
+intros t t' H. induction H in s', ρ |- * ; simpl_subst.
+- cbn. apply red1_beta_alt. f_equal. now simpl_subst.
+- eapply red1_evar_expand. eassumption.
+- now apply red1_lam_l.
+- now apply red1_lam_r.
+- now apply red1_prod_l.
+- now apply red1_prod_r.
+- now apply red1_app_l.
+- apply red1_app_r, OnOne2_map. revert H. apply OnOne2_consequence. firstorder.
+Qed.
 
-  (** Renaming lemma for [red1]. *)
-  #[export] Instance red1_rename (ρ : ren s s') :
-    Proper (red1 Σ ==> red1 Σ) (rename ρ).
-  Proof.
-  intros t t' H. induction H in s', ρ |- * ; simpl_subst.
-  - cbn. apply red1_beta_alt. f_equal. now simpl_subst.
-  - eapply red1_evar_expand. eassumption.
-  - now apply red1_lam_l.
-  - now apply red1_lam_r.
-  - now apply red1_prod_l.
-  - now apply red1_prod_r.
-  - now apply red1_app_l.
-  - apply red1_app_r, OnOne2_map. revert H. apply OnOne2_consequence. firstorder.
-  Qed.
+(** Compatibility of renaming with [red]. *)
+#[export] Instance red_rename {Σ s s'} (ρ : ren s s') :
+  Proper (red Σ ==> red Σ) (rename ρ).
+Proof.
+intros t t' H. induction H.
+- reflexivity.
+- now rewrite IHred, H0.
+Qed.
 
-  (** Renaming lemma for [red]. *)
-  #[export] Instance red_rename (ρ : ren s s') :
-    Proper (red Σ ==> red Σ) (rename ρ).
-  Proof.
-  intros t t' H. induction H.
-  - reflexivity.
-  - now rewrite IHrefl_trans_clos, H0.
-  Qed.
+#[export] Instance red_scons {Σ s s' x} :
+  Proper (red Σ ==> sred Σ ==> sred Σ) (@scons s s' x).
+Proof.
+intros t t' Ht σ σ' Hσ. constructor. intros i. depelim i ; simpl_subst.
+- assumption.
+- now rewrite Hσ.
+Qed.
 
-  #[export] Instance red_scons :
-    Proper (red Σ ==> sred Σ ==> sred Σ) (@scons s s' x).
-  Proof.
-  intros t t' Ht σ σ' Hσ. constructor. intros i. depelim i ; simpl_subst.
-  - assumption.
-  - now rewrite Hσ.
-  Qed.
+#[export] Instance red_srcomp {Σ s s' s''} :
+  Proper (sred Σ ==> eq ==> sred Σ) (@srcomp s s' s'').
+Proof.
+intros σ σ' Hσ ρ ρ' <-. constructor. intros i. simpl_subst.
+now rewrite Hσ.
+Qed.
 
-  #[export] Instance red_srcomp :
-    Proper (sred Σ ==> eq ==> sred Σ) (@srcomp s s' s'').
-  Proof.
-  intros σ σ' Hσ ρ ρ' <-. constructor. intros i. simpl_subst.
-  rewrite Hσ.
-  f_equiv.
-  rewrite Hσ.
+#[export] Instance red_rscomp {Σ s s' s''} ρ :
+  Proper (sred Σ ==> sred Σ) (@rscomp s s' s'' ρ).
+Proof.
+intros σ σ' Hσ. constructor. intros i. simpl_subst.
+now rewrite Hσ.
+Qed.
 
+#[export] Instance red_sup {Σ s s' x} :
+  Proper (sred Σ ==> sred Σ) (@sup s s' x).
+Proof. intros σ σ' Hσ. unfold sup. now rewrite Hσ. Qed.
 
+(** Compatibility of substitution with [red1]. Note that a single reduction in
+    the substitution can cause several reductions in the result, so here we fix
+    the substitution [σ]. *)
+#[export] Instance red1_substitute_l {Σ s s'} (σ : subst s s') :
+  Proper (red1 Σ ==> red1 Σ) (substitute σ).
+Proof.
+intros t t' H. induction H in s', σ |- * ; simpl_subst.
+- cbn. apply red1_beta_alt. f_equal. now simpl_subst.
+- eapply red1_evar_expand. eassumption.
+- now apply red1_lam_l.
+- now apply red1_lam_r.
+- now apply red1_prod_l.
+- now apply red1_prod_r.
+- now apply red1_app_l.
+- apply red1_app_r, OnOne2_map. revert H. apply OnOne2_consequence. firstorder.
+Qed.
 
+(** Substitution lemma for [red]. *)
+#[export] Instance red_substitute {Σ s s'} :
+  Proper (sred Σ ==> red Σ ==> red Σ) (@substitute s s').
+Proof.
+intros σ σ' Hσ t t' H. transitivity (substitute σ' t).
+- clear t' H. induction t in s', σ, σ', Hσ |- * using term_ind' ; simpl_subst.
+  + reflexivity.
+  + now rewrite Hσ.
+  + f_equiv.
+    * now apply IHt1.
+    * apply IHt2. now f_equiv.
+  + f_equiv.
+    * now apply IHt1.
+    * apply IHt2. now f_equiv.
+  + f_equiv.
+    * now apply IHt.
+    * clear t IHt. induction H ; cbn ; constructor ; auto.
+  + reflexivity.
+- induction H.
+  + reflexivity.
+  + now rewrite IHred, H0.
+Qed.
 
-  (** Substitution lemma for [red1]. *)
-  #[export] Instance red1_substitute_l (σ : subst s s') :
-    Proper (red1 Σ ==> red1 Σ) (substitute σ).
-  Proof.
-  intros t t' H. induction H in s', σ |- * ; simpl_subst.
-  - cbn. apply red1_beta_alt. f_equal. now simpl_subst.
-  - eapply red1_evar_expand. eassumption.
-  - now apply red1_lam_l.
-  - now apply red1_lam_r.
-  - now apply red1_prod_l.
-  - now apply red1_prod_r.
-  - now apply red1_app_l.
-  - apply red1_app_r, OnOne2_map. revert H. apply OnOne2_consequence. firstorder.
-  Qed.
-
-  (** Substitution lemma for [red]. *)
-  #[export] Instance red_substitute :
-    Proper (sred Σ ==> red Σ ==> red Σ) (@substitute s s').
-  Proof.
-  intros σ σ' Hσ t t' H. transitivity (substitute σ' t).
-  - clear t' H. induction t in s', σ, σ', Hσ |- * using term_ind' ; simpl_subst.
-    + reflexivity.
-    + now rewrite Hσ.
-    + f_equiv.
-      * now apply IHt1.
-      * apply IHt2. apply red_sup.  rewrite IHt1 ; eauto.
-  - induction H.
-    + reflexivity.
-    + now rewrite IHrefl_trans_clos, H0.
-  Qed.
-
-End SubstitutionLemma.
+#[export] Instance red_scomp {Σ s s' s''} :
+  Proper (sred Σ ==> sred Σ ==> sred Σ) (@scomp s s' s'').
+Proof.
+intros σ σ' Hσ τ τ' Hτ. constructor. intros i. simpl_subst.
+now rewrite Hτ, Hσ.
+Qed.

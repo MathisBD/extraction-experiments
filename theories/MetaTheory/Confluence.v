@@ -68,18 +68,18 @@ induction args ; constructor ; depelim H ; auto.
 Qed.
 
 (** Parallel reduction on substitutions is just pointwise parallel reduction. *)
-Definition pred1_subst {s s'} Σ (σ σ' : subst s s') : Prop :=
+Definition spred1 {s s'} Σ (σ σ' : subst s s') : Prop :=
   forall i, Σ ⊢ sapply σ i >> sapply σ' i.
 
-Notation "Σ ⊢ σ1 >>ₛ σ2" := (pred1_subst Σ σ1 σ2)
+Notation "Σ ⊢ σ1 >>ₛ σ2" := (spred1 Σ σ1 σ2)
   (at level 50, no associativity, σ1 at next level, σ2 at next level).
 
-#[export] Instance pred1_subst_Reflexive s s' Σ :
-  Reflexive (@pred1_subst s s' Σ).
+#[export] Instance spred1_Reflexive s s' Σ :
+  Reflexive (@spred1 s s' Σ).
 Proof. intros σ i. reflexivity. Qed.
 
 (***********************************************************************)
-(** * Induction principle on [red1]. *)
+(** * Induction principle on [pred1]. *)
 (***********************************************************************)
 
 (** Induction principle for [pred1]. We can't use Rocq's default induction principle
@@ -175,9 +175,11 @@ Qed.
 Lemma red_is_pred {s} Σ (t u : term s) :
   Σ ⊢ t ~~> u <-> refl_trans_clos (pred1 Σ) t u.
 Proof.
-split ; revert t u ; apply refl_trans_clos_incl.
-- intros t u H. apply refl_trans_clos_one. now apply pred1_of_red1.
-- intros t u H. now apply red_of_pred1.
+split ; intros H ; induction H.
+- reflexivity.
+- apply refl_trans_step with t2 ; auto. now apply pred1_of_red1.
+- reflexivity.
+- rewrite IHrefl_trans_clos. now apply red_of_pred1.
 Qed.
 
 (***********************************************************************)
@@ -218,11 +220,11 @@ intros t t' H. induction H in s', ρ |- * ; simpl_subst.
 Qed.
 
 #[export] Instance pred1_scons {x s s'} Σ :
-  Proper (pred1 Σ ==> pred1_subst Σ ==> pred1_subst Σ) (@scons s s' x).
+  Proper (pred1 Σ ==> spred1 Σ ==> spred1 Σ) (@scons s s' x).
 Proof. intros t t' Ht σ σ' Hσ i. depelim i ; simpl_subst ; auto. Qed.
 
 #[export] Instance pred1_sup {x s s'} Σ :
-  Proper (pred1_subst Σ ==> pred1_subst Σ) (@sup s s' x).
+  Proper (spred1 Σ ==> spred1 Σ) (@sup s s' x).
 Proof.
 intros σ σ' H i. depelim i ; simpl_subst.
 - reflexivity.
@@ -231,7 +233,7 @@ Qed.
 
 (** Substitution lemma for [pred1]. *)
 #[export] Instance pred1_substitute {s s'} Σ :
-  Proper (pred1_subst Σ ==> pred1 Σ ==> pred1 Σ) (@substitute s s').
+  Proper (spred1 Σ ==> pred1 Σ ==> pred1 Σ) (@substitute s s').
 Proof.
 intros σ σ' Hσ t t' Ht. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
 - apply pred1_app_beta_alt
