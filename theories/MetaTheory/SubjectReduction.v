@@ -60,28 +60,22 @@ intros HΣ Hev Hentry. apply typing_conv_type with (wk ty).
 - eapply typing_validity ; eassumption.
 Qed.
 
-Reserved Notation "Σ ⊢ Γ1 '~>ctx' Γ2"
-  (at level 50, Γ1 at next level, Γ2 at next level).
-
 (** Context reduction. *)
-Inductive red1_context (Σ : evar_map) : forall {s}, context ∅ s -> context ∅ s -> Prop :=
-| red1_context_head {s} Γ x (ty ty' : term s) :
+Inductive cred1 (Σ : evar_map) : forall {s}, context ∅ s -> context ∅ s -> Prop :=
+| cred1_head {s} Γ x (ty ty' : term s) :
     Σ ⊢ ty ~> ty' ->
-    Σ ⊢ CCons Γ x ty ~>ctx CCons Γ x ty'
+    cred1 Σ (CCons Γ x ty) (CCons Γ x ty')
 
-| red1_context_tail {s} Γ Γ' x (ty : term s) :
-    Σ ⊢ Γ ~>ctx Γ' ->
-    Σ ⊢ CCons Γ x ty ~>ctx CCons Γ' x ty
+| cred1_tail {s} Γ Γ' x (ty : term s) :
+    cred1 Σ Γ Γ' ->
+    cred1 Σ (CCons Γ x ty) (CCons Γ' x ty).
 
-where "Σ ⊢ Γ1 '~>ctx' Γ2" := (red1_context Σ Γ1 Γ2).
-
-Derive Signature for red1_context.
-
+Derive Signature for cred1.
 
 Definition sr_prop Σ {s} Γ (t T : term s) :=
   typing_evar_map Σ ->
     (forall t', Σ ⊢ t ~> t' -> Σ ;; Γ ⊢ t' : T) /\
-    (forall Γ', Σ ⊢ Γ ~>ctx Γ' -> Σ ;; Γ' ⊢ t : T).
+    (forall Γ', cred1 Σ Γ Γ' -> Σ ;; Γ' ⊢ t : T).
 
 Lemma All_context_and (P Q : forall s, context ∅ s -> term s -> term s -> Prop) s (Γ : context ∅ s) :
   All_context (fun s Γ t T => P s Γ t T /\ Q s Γ t T) Γ <->
@@ -97,7 +91,7 @@ induction Γ.
 Qed.
 
 Lemma red1_context_conv_lookup {s} Σ (Γ Γ' : context ∅ s) i :
-  Σ ⊢ Γ ~>ctx Γ' ->
+  cred1 Σ Γ Γ' ->
   Σ ⊢ lookup_context i Γ ≡ lookup_context i Γ'.
 Proof.
 intros Hred. induction Hred ; depelim i ; simp lookup_context ; simpl_subst.
@@ -110,7 +104,7 @@ Qed.
 Lemma typing_context_red1 {s} Σ (Γ Γ' : context ∅ s) :
   typing_evar_map Σ ->
   All_context (@sr_prop Σ) Γ ->
-  Σ ⊢ Γ ~>ctx Γ' ->
+  cred1 Σ Γ Γ' ->
   typing_context Σ Γ ->
   typing_context Σ Γ'.
 Proof.
@@ -129,7 +123,7 @@ Lemma typing_lookup_context_red1 {s} Σ (Γ Γ' : context ∅ s) i :
   typing_evar_map Σ ->
   All_context (@sr_prop Σ) Γ ->
   typing_context Σ Γ ->
-  Σ ⊢ Γ ~>ctx Γ' ->
+  cred1 Σ Γ Γ' ->
   Σ ;; Γ' ⊢ lookup_context i Γ : TType.
 Proof.
 intros HΣ Hsr HΓ Hred. induction Hred.
@@ -184,14 +178,40 @@ intros HΣ Hspine Hred. revert f_ty T Hspine. induction Hred ; intros f_ty T Hsp
     * destruct HT' as (T'' & HT' & HT''). exists T''. split.
       --econstructor ; eauto. now apply H2.
       --now rewrite Hconv.
-    * admit.
+    * f_equiv. f_equiv. now apply conv_of_red1.
   + destruct (IHHred _ _ Hspine) as (T' & HT' & Hconv).
     apply All_spine_conv_func_type with (f_ty' := b[x0 := y]) in HT'.
     * destruct HT' as (T'' & HT' & HT''). exists T''. split.
       --econstructor ; eauto. now destruct H2.
       --now rewrite Hconv.
     * reflexivity.
-Admitted.
+Qed.
+
+Lemma OneOne2_red1_All2 {Σ s} (xs ys : list (term s)) :
+  OnOne2 (red1 Σ) xs ys ->
+  All2 (fun x y => Σ ⊢ x ~> y \/ x = y) xs ys.
+Proof.
+intros H. induction H ; constructor ; auto.
+apply All2_Reflexive. intros z. now right.
+Qed.
+
+(** In a spine typing judgement, if the function type [f_ty] is well-typed
+    than so is the result type [T]. *)
+Lemma typing_spine_validity {s} Σ Γ (f_ty : term s) args T :
+  All_spine Σ (typing Σ Γ) f_ty args T ->
+  Σ ;; Γ ⊢ f_ty : TType ->
+  Σ ;; Γ ⊢ T : TType.
+Proof.
+intros Hspine Hf. induction Hspine.
+- assumption.
+- apply typing_prod_inv in H. apply IHHspine.
+  change TType with (TType[x := arg]). eapply typing_substitute.
+  + apply H.
+  + apply typing_scons.
+    * apply H.
+    * simpl_subst. assumption.
+    * apply typing_sid. eapply typing_context_validity ; eauto.
+Qed.
 
 (** One-step reduction preserves typing. *)
 Lemma typing_red1 {s} Σ Γ (t T : term s) :
@@ -232,15 +252,18 @@ intros Ht. induction Ht ; (split ; [intros t' Hred | intros Γ' Hred]).
     revert H. apply All_spine_consequence. firstorder.
   + apply typing_app with f_ty ; [now apply IHHt |].
     revert H. apply All_spine_consequence. firstorder.
-  + apply typing_app with f_ty ; [assumption |].
-    clear f IHHt Ht. revert args' H1. induction H ; intros args' Hone. ; depelim Hone.
-    * econstructor ; eauto.
-      --now destruct H.
-      --apply H2 ; auto.
-      --admit.
-    * econstructor ; eauto.
-      --now destruct H.
-      --now destruct H2.
+  + assert (HT : Σ ;; Γ ⊢ T : TType).
+    {
+      eapply typing_spine_validity with f_ty args.
+      - revert H. apply All_spine_consequence. firstorder.
+      - eapply typing_validity ; eauto.
+    }
+    apply typing_spine_red1 with (args' := args') in H ; auto.
+    2: now apply OneOne2_red1_All2.
+    destruct H as (T' & H & Hconv). apply typing_conv_type with T'.
+    * apply typing_app with f_ty ; auto.
+    * now symmetry.
+    * auto.
 - apply typing_app with f_ty ; [now apply IHHt |].
   clear f Ht IHHt. induction H ; econstructor ; try eassumption.
   + apply H ; auto.
@@ -256,9 +279,7 @@ intros Ht. induction Ht ; (split ; [intros t' Hred | intros Γ' Hred]).
 - apply typing_conv_type with A ; auto.
   + now apply IHHt1.
   + now apply IHHt2.
-Admitted.
-
-
+Qed.
 
 Definition conv_context {s} Σ (Γ Γ' : context ∅ s) :=
   forall i,

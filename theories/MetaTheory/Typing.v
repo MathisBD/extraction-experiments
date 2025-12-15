@@ -442,7 +442,7 @@ intros H1 H2 H3. unfold rup. apply typing_rcons.
   + apply H2.
 Qed.
 
-(** Compatibility of typing with renamings *)
+(** Compatibility of typing with renaming. *)
 Lemma typing_rename {s s'} Σ Γ Δ (ρ : ren s s') t T :
   Σ ;; Γ ⊢ t : T ->
   Σ ;; Γ ⊢ᵣ ρ : Δ ->
@@ -672,7 +672,7 @@ intros HA. revert A'. induction HA ; intros A' HA'.
   + depelim Hspine ; depelim H2. assumption.
   + depelim Hspine ; depelim H2. eapply IHargs ; [| eassumption.. ].
     assert (x0 = x) as ->. { destruct x0 ; destruct x ; reflexivity. }
-    apply conv_substitute. rewrite H0, H3 in Hf'. now apply conv_prod_inv in Hf'.
+    f_equiv. rewrite H0, H3 in Hf'. now apply conv_prod_inv in Hf'.
 - apply typing_evar_inv in HA'. destruct HA' as (entry' & Hentry & HA').
   rewrite H0 in Hentry. depelim Hentry. now symmetry.
 - rewrite <-H. now apply IHHA1.

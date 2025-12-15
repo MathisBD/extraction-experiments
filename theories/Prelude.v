@@ -134,13 +134,13 @@ Lemma All2_consequence {A} (P Q : A -> A -> Prop) xs ys :
   All2 Q xs ys.
 Proof. intros H H'. induction H' ; constructor ; auto. Qed.
 
-#[export] Instance All2_Reflexive {A} (P : A -> A -> Prop) :
-  Reflexive P -> Reflexive (All2 P).
-Proof. intros H xs. induction xs ; now constructor. Qed.
+#[export] Instance All2_Reflexive {A} (P : A -> A -> Prop) {H : Reflexive P} :
+  Reflexive (All2 P).
+Proof. intros xs. induction xs ; now constructor. Qed.
 
-Lemma All2_of_OnOne2 {A} (P : A -> A -> Prop) xs ys :
-  Reflexive P -> OnOne2 P xs ys -> All2 P xs ys.
-Proof. intros HR H. induction H ; now constructor. Qed.
+Lemma All2_of_OnOne2 {A} (P : A -> A -> Prop) xs ys {H : Reflexive P} :
+  OnOne2 P xs ys -> All2 P xs ys.
+Proof. intros H'. induction H' ; now constructor. Qed.
 
 Lemma All2_map {A A' B B'} (P : A' -> B' -> Prop) (f : A -> A') (g : B -> B') xs ys :
   All2 P (map f xs) (map g ys) <->
