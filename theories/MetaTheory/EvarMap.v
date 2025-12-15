@@ -5,8 +5,8 @@ From Metaprog Require Export Data.Evars.
     but we do not extract it to OCaml: meta-programs instead use Rocq's built-in evar map.
 
     An advantage of the definition of evar maps as done here is _extensionality_:
-    to prove that two evars maps are equal, it suffices to prove pointwise equality
-    (and same thing for )*)
+    to prove that two evars maps are equal, it suffices to prove pointwise equality.
+*)
 
 (** The logical view of the evar map used in proofs.
 

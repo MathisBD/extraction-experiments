@@ -1,8 +1,12 @@
 From Metaprog Require Import Prelude.
-From Metaprog.MetaTheory Require Export Reduction.
+From Metaprog.MetaTheory Require Export Reduction.ContextReduction.
 
-(** This module proves the confluence lemma for the reduction relation [red]
-    using the standard parallel reduction technique. *)
+(** This module proves the confluence lemma for the multi-step reduction
+    relation using the standard parallel reduction technique.
+
+    We prove confluence not only for reduction of terms [red],
+    but also for reduction of substitutions [sred] and reduction
+    of contexts [cred]. *)
 
 (***********************************************************************)
 (** * Parallel reduction. *)
@@ -404,10 +408,10 @@ Lemma pred1_confluence {s} Σ :
 Proof. apply diamond_confluence. intros t u1 u2. apply pred1_diamond. Qed.
 
 (***********************************************************************)
-(** * Main result: confluence of [red]. *)
+(** * Main result: confluence of [red], [sred], and [cred]. *)
 (***********************************************************************)
 
-(** Confluence for [red] is an immediate result of the confluence for [pred1]. *)
+(** Confluence for [red] is an immediate result of confluence for [pred1]. *)
 Lemma red_confluence {s} Σ (t u1 u2 : term s) :
   Σ ⊢ t ~~> u1 ->
   Σ ⊢ t ~~> u2 ->
@@ -417,3 +421,48 @@ intros H1 H2. rewrite red_is_pred in H1, H2.
 pose proof (H := pred1_confluence Σ t u1 u2 H1 H2).
 destruct H as (v & Hv1 & Hv2). exists v. rewrite !red_is_pred. now split.
 Qed.
+
+(** Confluence for [sred] follows from confluence for [red]. *)
+Lemma sred_confluence {s s'} Σ (σ τ1 τ2 : subst s s') :
+  sred Σ σ τ1 ->
+  sred Σ σ τ2 ->
+  exists σ', sred Σ τ1 σ' /\ sred Σ τ2 σ'.
+Proof.
+intros H1 H2. induction s in s', σ, τ1, τ2, H1, H2 |- *.
+- exists (sren wk_idx). split ; constructor ; intros i ; depelim i.
+- specialize (IHs s' (rscomp rshift σ) (rscomp rshift τ1) (rscomp rshift τ2)).
+  forward IHs. { now rewrite H1. }
+  forward IHs. { now rewrite H2. }
+  destruct IHs as (σ' & Hσ1 & Hσ2).
+  assert (exists t, Σ ⊢ sapply τ1 I0 ~~> t /\ Σ ⊢ sapply τ2 I0 ~~> t) as (t & Ht1 & Ht2).
+  {
+    apply red_confluence with (sapply σ I0).
+    - now rewrite H1.
+    - now rewrite H2.
+  }
+  exists (scons x t σ'). split ; constructor ; intros i ; depelim i ; simpl_subst.
+  + apply Ht1.
+  + apply Hσ1.
+  + apply Ht2.
+  + apply Hσ2.
+Qed.
+
+(** Confluence for [cred] follows from confluence for [red]. *)
+Lemma cred_confluence {s} Σ (Γ Γ1 Γ2 : context ∅ s) :
+  cred Σ Γ Γ1 ->
+  cred Σ Γ Γ2 ->
+  exists Γ', cred Σ Γ1 Γ' /\ cred Σ Γ2 Γ'.
+Proof.
+intros H1 H2. induction s in Γ, Γ1, Γ2, H1, H2 |- *.
+- depelim Γ ; depelim Γ1 ; depelim Γ2. exists CNil. split ; constructor.
+- depelim H1. depelim H2. unfold eq_rect in H3. cbn in H3. depelim H3.
+  (* Equations issues. *)
+  assert (Γ0 = Γ) as -> by admit. assert (ty0 = ty) as -> by admit. clear H3 H5 H5'.
+  destruct (IHs Γ Γ' Γ'0 H1 H2) as (Γ1 & HΓ & HΓ').
+  assert (exists ty1, Σ ⊢ ty' ~~> ty1 /\ Σ ⊢ ty'0 ~~> ty1) as (ty1 & Hty1 & Hty2).
+  { now apply red_confluence with ty. }
+  exists (CCons Γ1 x ty1). split ; constructor ; auto.
+Admitted.
+
+
+
