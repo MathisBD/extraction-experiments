@@ -95,8 +95,6 @@ Qed.
 (** * Typing relation on terms. *)
 (***********************************************************************)
 
-Unset Elimination Schemes.
-
 Reserved Notation "Σ ;; Γ ⊢ t : T"
   (at level 50, no associativity, Γ, t, T at next level).
 
@@ -105,6 +103,8 @@ Reserved Notation "'ctyping' Σ Γ"
 
 Reserved Notation "'spine_typing' Σ Γ f_ty args T"
   (at level 9, Σ, Γ, f_ty, args, T at next level).
+
+Unset Elimination Schemes.
 
 (** [Σ ;; Γ ⊢ t : T] means that [t] has type [T] under context [Γ] in evar-map [Σ].
 
@@ -165,39 +165,39 @@ Derive Signature for typing.
 (***********************************************************************)
 
 (** Induction principle for [typing]. *)
-Lemma typing_ind
-  (P : evar_map -> forall s, context ∅ s -> term s -> term s -> Prop)
-  (Htype : forall s Σ Γ,
-    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P Σ s' Γ' t T) Γ ->
-    P Σ s Γ TType TType)
-  (Hvar : forall s Σ Γ i ty,
-    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P Σ s' Γ' t T) Γ ->
+Lemma typing_ind (Σ : evar_map)
+  (P : forall s, context ∅ s -> term s -> term s -> Prop)
+  (Htype : forall s Γ,
+    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P s' Γ' t T) Γ ->
+    P s Γ TType TType)
+  (Hvar : forall s Γ i ty,
+    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P s' Γ' t T) Γ ->
     lookup_context i Γ = ty ->
-    P Σ s Γ (TVar i) ty)
-  (Hlam : forall s Σ Γ x ty body body_ty,
-    Σ ;; Γ ⊢ ty : TType -> P Σ s Γ ty TType ->
-    Σ ;; CCons Γ x ty ⊢ body : body_ty -> P Σ (s ▷ x) (CCons Γ x ty) body body_ty ->
-    P Σ s Γ (TLam x ty body) (TProd x ty body_ty))
-  (Hprod : forall s Σ Γ x a b,
-    Σ ;; Γ ⊢ a : TType -> P Σ s Γ a TType ->
-    Σ ;; CCons Γ x a ⊢ b : TType -> P Σ (s ▷ x) (CCons Γ x a) b TType ->
-    P Σ s Γ (TProd x a b) TType)
-  (Happ : forall s Σ Γ f f_ty args T,
-    Σ ;; Γ ⊢ f : f_ty -> P Σ s Γ f f_ty ->
-    All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ P Σ s Γ t T) f_ty args T ->
-    P Σ s Γ (TApp f args) T)
-  (Hevar : forall s Σ Γ ev entry,
-    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P Σ s' Γ' t T) Γ ->
+    P s Γ (TVar i) ty)
+  (Hlam : forall s Γ x ty body body_ty,
+    Σ ;; Γ ⊢ ty : TType -> P s Γ ty TType ->
+    Σ ;; CCons Γ x ty ⊢ body : body_ty -> P (s ▷ x) (CCons Γ x ty) body body_ty ->
+    P s Γ (TLam x ty body) (TProd x ty body_ty))
+  (Hprod : forall s Γ x a b,
+    Σ ;; Γ ⊢ a : TType -> P s Γ a TType ->
+    Σ ;; CCons Γ x a ⊢ b : TType -> P (s ▷ x) (CCons Γ x a) b TType ->
+    P s Γ (TProd x a b) TType)
+  (Happ : forall s Γ f f_ty args T,
+    Σ ;; Γ ⊢ f : f_ty -> P s Γ f f_ty ->
+    All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ P s Γ t T) f_ty args T ->
+    P s Γ (TApp f args) T)
+  (Hevar : forall s Γ ev entry,
+    All_context (fun s' Γ' t T => Σ ;; Γ' ⊢ t : T /\ P s' Γ' t T) Γ ->
     Σ ev = Some entry ->
-    P Σ s Γ (TEvar ev) (wk entry.(evar_type)))
-  (Hconv_type : forall s Σ Γ t A B,
-    Σ ;; Γ ⊢ t : A -> P Σ s Γ t A ->
+    P s Γ (TEvar ev) (wk entry.(evar_type)))
+  (Hconv_type : forall s Γ t A B,
+    Σ ;; Γ ⊢ t : A -> P s Γ t A ->
     Σ ⊢ A ≡ B ->
-    Σ ;; Γ ⊢ B : TType -> P Σ s Γ B TType ->
-    P Σ s Γ t B) :
-  forall Σ s Γ t T, Σ ;; Γ ⊢ t : T -> P Σ s Γ t T.
+    Σ ;; Γ ⊢ B : TType -> P s Γ B TType ->
+    P s Γ t B) :
+  forall s Γ t T, Σ ;; Γ ⊢ t : T -> P s Γ t T.
 Proof.
-fix IH 6. intros Σ s Γ t T H. depelim H.
+fix IH 5. intros s Γ t T H. depelim H.
 - apply Htype. revert s Γ H. fix IHctx 3. intros s Γ H. destruct H ; constructor.
   + apply IHctx. assumption.
   + split ; auto.

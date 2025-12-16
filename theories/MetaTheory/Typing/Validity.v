@@ -37,8 +37,7 @@ intros HΣ H. induction H.
   apply All_context_consequence. firstorder.
 - constructor ; auto.
 - constructor. eapply typing_context_validity ; eauto.
-- specialize (IHtyping HΣ).
-  assert (H1 : All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ Σ ;; Γ ⊢ T : TType) f_ty args T).
+- assert (H1 : All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ Σ ;; Γ ⊢ T : TType) f_ty args T).
   { revert H0. apply All_spine_consequence. firstorder. }
   clear H H0. induction H1.
   + assumption.

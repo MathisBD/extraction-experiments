@@ -5,100 +5,11 @@ From Metaprog Require Export MetaTheory.Typing.Validity.
     reducing a well-typed term doesn't change its type.
 
     We also prove immediate consequences of this:
-    - Typing is compatible with conversion in contexts, terms and types.
-    - *)
-
-(***********************************************************************)
-(** * Helper lemmas for subject reduction. *)
-(***********************************************************************)
-
-(** Given a typing derivation [Σ ;; Γ ⊢ t : T], we prove at the same time that:
-    - One reduction step in the term [T] preserves the type.
-    - One reduction step in the context [Γ] preserves the type.
-
-    This corresponds exactly to the property [sr_prop Σ Γ t T].
-    Our objective is then to show that [typing] implies [sr_prop]. *)
-Definition sr_prop Σ {s} Γ (t T : term s) :=
-  typing_evar_map Σ ->
-    (forall t', Σ ⊢ t ~> t' -> Σ ;; Γ ⊢ t' : T) /\
-    (forall Γ', cred1 Σ Γ Γ' -> Σ ;; Γ' ⊢ t : T).
-
-Lemma ctyping_red1 {s} Σ (Γ Γ' : context ∅ s) :
-  typing_evar_map Σ ->
-  All_context (@sr_prop Σ) Γ ->
-  cred1 Σ Γ Γ' ->
-  ctyping Σ Γ ->
-  ctyping Σ Γ'.
-Proof.
-intros HΣ Hsr Hred HΓ. induction Hred.
-- constructor.
-  + now depelim HΓ.
-  + depelim HΓ. depelim Hsr. now apply H.
-- constructor.
-  + apply IHHred.
-    * now depelim Hsr.
-    * now depelim HΓ.
-  + depelim Hsr. apply H ; auto.
-Qed.
-
-Lemma typing_lookup_context_red1 {s} Σ (Γ Γ' : context ∅ s) i :
-  typing_evar_map Σ ->
-  All_context (@sr_prop Σ) Γ ->
-  ctyping Σ Γ ->
-  cred1 Σ Γ Γ' ->
-  Σ ;; Γ' ⊢ lookup_context i Γ : TType.
-Proof.
-intros HΣ Hsr HΓ Hred. induction Hred.
-- depelim Hsr. depelim HΓ. depelim i ; simp lookup_context ; simpl_subst.
-  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ ; auto.
-    apply typing_rshift. constructor ; auto. now apply H.
-  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ.
-    * now apply typing_lookup_context.
-    * apply typing_rshift. constructor ; auto. now apply H.
-- depelim Hsr. depelim HΓ. depelim i ; simp lookup_context ; simpl_subst.
-  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ' ; auto.
-    * now apply H.
-    * apply typing_rshift. constructor ; auto.
-      --apply ctyping_red1 with Γ ; auto.
-      --now apply H.
-  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ' ; auto.
-    apply typing_rshift. constructor ; auto.
-    --apply ctyping_red1 with Γ ; auto.
-    --now apply H.
-Qed.
-
-Lemma typing_spine_red1 {s} Σ (Γ : context ∅ s) f_ty args args' T :
-  typing_evar_map Σ ->
-  All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ sr_prop Σ Γ t T) f_ty args T ->
-  All2 (fun a a' => Σ ⊢ a ~> a' \/ a = a') args args' ->
-  exists T',
-    All_spine Σ (typing Σ Γ) f_ty args' T' /\
-    Σ ⊢ T ≡ T'.
-Proof.
-intros HΣ Hspine Hred. revert f_ty T Hspine. induction Hred ; intros f_ty T Hspine.
-- depelim Hspine. exists f_ty. split ; [constructor | reflexivity].
-- depelim Hspine. destruct H0 as (H0 & H0'). destruct H as [H | ->].
-  + destruct (IHHred _ _ Hspine) as (T' & HT' & Hconv).
-    apply All_spine_conv_func_type with (f_ty' := b[x0 := y]) in HT'.
-    * destruct HT' as (T'' & HT' & HT''). exists T''. split.
-      --econstructor ; eauto. now apply H2.
-      --now rewrite Hconv.
-    * f_equiv. f_equiv. now apply conv_of_red1.
-  + destruct (IHHred _ _ Hspine) as (T' & HT' & Hconv).
-    apply All_spine_conv_func_type with (f_ty' := b[x0 := y]) in HT'.
-    * destruct HT' as (T'' & HT' & HT''). exists T''. split.
-      --econstructor ; eauto. now destruct H2.
-      --now rewrite Hconv.
-    * reflexivity.
-Qed.
-
-Lemma OneOne2_red1_All2 {Σ s} (xs ys : list (term s)) :
-  OnOne2 (red1 Σ) xs ys ->
-  All2 (fun x y => Σ ⊢ x ~> y \/ x = y) xs ys.
-Proof.
-intros H. induction H ; constructor ; auto.
-apply All2_Reflexive. intros z. now right.
-Qed.
+    - [typing] is compatible with reduction in contexts, terms and types.
+    - [ctyping] is compatible with context reduction.
+    - [rtyping] is compatible with context reduction.
+    - [styping] is compatible with context reduction and substitution reduction.
+*)
 
 (** In a spine typing judgement, if the function type [f_ty] is well-typed
     than so is the result type [T]. *)
@@ -118,14 +29,103 @@ intros Hspine Hf. induction Hspine.
     * apply typing_sid. eapply typing_context_validity ; eauto.
 Qed.
 
+(***********************************************************************)
+(** * Technical meat of the proof. *)
+(***********************************************************************)
+
+Section SubjectReduction.
+Context (Σ : evar_map) (HΣ : typing_evar_map Σ).
+
+(** Given a typing derivation [Σ ;; Γ ⊢ t : T], we prove at the same time that:
+    - One reduction step in the term [t] preserves the type.
+    - One reduction step in the context [Γ] preserves the type.
+
+    This corresponds exactly to the property [sr_prop Γ t T].
+    Our objective is then to show that [typing] implies [sr_prop]. *)
+Definition sr_prop {s} Γ (t T : term s) :=
+  (forall t', Σ ⊢ t ~> t' -> Σ ;; Γ ⊢ t' : T) /\
+  (forall Γ', cred1 Σ Γ Γ' -> Σ ;; Γ' ⊢ t : T).
+
+Lemma ctyping_red1 {s} (Γ Γ' : context ∅ s) :
+  All_context (@sr_prop) Γ ->
+  cred1 Σ Γ Γ' ->
+  ctyping Σ Γ ->
+  ctyping Σ Γ'.
+Proof.
+intros Hsr Hred HΓ. induction Hred.
+- constructor.
+  + now depelim HΓ.
+  + depelim HΓ. depelim Hsr. now apply H.
+- constructor.
+  + apply IHHred.
+    * now depelim Hsr.
+    * now depelim HΓ.
+  + depelim Hsr. apply H ; auto.
+Qed.
+
+Lemma typing_lookup_context_red1 {s} (Γ Γ' : context ∅ s) i :
+  All_context (@sr_prop) Γ ->
+  ctyping Σ Γ ->
+  cred1 Σ Γ Γ' ->
+  Σ ;; Γ' ⊢ lookup_context i Γ : TType.
+Proof.
+intros Hsr HΓ Hred. induction Hred.
+- depelim Hsr. depelim HΓ. depelim i ; simp lookup_context ; simpl_subst.
+  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ ; auto.
+    apply typing_rshift. constructor ; auto. now apply H.
+  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ.
+    * now apply typing_lookup_context.
+    * apply typing_rshift. constructor ; auto. now apply H.
+- depelim Hsr. depelim HΓ. depelim i ; simp lookup_context ; simpl_subst.
+  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ' ; auto.
+    * now apply H.
+    * apply typing_rshift. constructor ; auto.
+      --apply ctyping_red1 with Γ ; auto.
+      --now apply H.
+  + change TType with (rename (@rshift s x) TType). apply typing_rename with Γ' ; auto.
+    apply typing_rshift. constructor ; auto.
+    --apply ctyping_red1 with Γ ; auto.
+    --now apply H.
+Qed.
+
+Lemma typing_spine_red1 {s} (Γ : context ∅ s) f_ty args args' T :
+  All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ sr_prop Γ t T) f_ty args T ->
+  All2 (fun a a' => Σ ⊢ a ~> a' \/ a = a') args args' ->
+  exists T',
+    All_spine Σ (typing Σ Γ) f_ty args' T' /\
+    Σ ⊢ T ≡ T'.
+Proof.
+intros Hspine Hred. revert f_ty T Hspine. induction Hred ; intros f_ty T Hspine.
+- depelim Hspine. exists f_ty. split ; [constructor | reflexivity].
+- depelim Hspine. destruct H0 as (H0 & H0'). destruct H as [H | ->].
+  + destruct (IHHred _ _ Hspine) as (T' & HT' & Hconv).
+    apply All_spine_conv_func_type with (f_ty' := b[x0 := y]) in HT'.
+    * destruct HT' as (T'' & HT' & HT''). exists T''. split.
+      --econstructor ; eauto. now apply H2.
+      --now rewrite Hconv.
+    * f_equiv. f_equiv. now apply conv_of_red1.
+  + destruct (IHHred _ _ Hspine) as (T' & HT' & Hconv).
+    apply All_spine_conv_func_type with (f_ty' := b[x0 := y]) in HT'.
+    * destruct HT' as (T'' & HT' & HT''). exists T''. split.
+      --econstructor ; eauto. now destruct H2.
+      --now rewrite Hconv.
+    * reflexivity.
+Qed.
+
+Lemma OneOne2_red1_All2 {s} (xs ys : list (term s)) :
+  OnOne2 (red1 Σ) xs ys ->
+  All2 (fun x y => Σ ⊢ x ~> y \/ x = y) xs ys.
+Proof.
+intros H. induction H ; constructor ; auto.
+apply All2_Reflexive. intros z. now right.
+Qed.
 
 (** The beta reduction rule preserves typing. *)
-Lemma typing_beta {s} Σ Γ x ty body arg args (T : term s) :
-  typing_evar_map Σ ->
+Lemma typing_beta {s} Γ x ty body arg args (T : term s) :
   Σ ;; Γ ⊢ TApp (TLam x ty body) (arg :: args) : T ->
   Σ ;; Γ ⊢ TApp (body[x := arg]) args : T.
 Proof.
-intros HΣ H. pose proof (HT := typing_validity _ _ _ _ HΣ H).
+intros H. pose proof (HT := typing_validity _ _ _ _ HΣ H).
 apply typing_app_inv in H. destruct H as (f_ty & T' & H1 & H2 & H3).
 apply typing_conv_type with T' ; [|assumption..]. clear T H3 HT.
 
@@ -156,93 +156,128 @@ assert (Hbody'' : Σ ;; Γ ⊢ body[x := arg] : b[x := arg]).
 eapply typing_app ; eauto.
 Qed.
 
-(** Evar expansion preserves typing. *)
-Lemma typing_evar_expand {s} Σ Γ ev ty def (T : term s) :
-  typing_evar_map Σ ->
-  Σ ;; Γ ⊢ TEvar ev : T ->
-  Σ ev = Some (mk_evar_entry ty (Some def)) ->
-  Σ ;; Γ ⊢ wk def : T.
+Lemma sr_prop_type {s} (Γ : context ∅ s) :
+  ctyping Σ Γ -> All_context (@sr_prop) Γ ->
+  sr_prop Γ TType TType.
 Proof.
-intros HΣ Hev Hentry. apply typing_conv_type with (wk ty).
-- simpl_subst. apply typing_rename with CNil.
-  + apply HΣ in Hentry. depelim Hentry. assumption.
-  + split3.
-    * constructor.
-    * eapply typing_context_validity ; eassumption.
-    * intros i. depelim i.
-- apply typing_evar_inv in Hev. destruct Hev as (entry & H & HT).
-  rewrite H in Hentry. depelim Hentry. cbn in HT. now symmetry.
-- eapply typing_validity ; eassumption.
+intros HΓ HΓ'. split.
+- intros t' Hred. depelim Hred.
+- intros Γ' Hred. constructor. apply ctyping_red1 with Γ ; auto.
 Qed.
 
-(** One-step reduction preserves typing. *)
-Lemma sr_prop_all {s} Σ Γ (t T : term s) :
-  Σ ;; Γ ⊢ t : T ->
-  sr_prop Σ Γ t T.
+Lemma sr_prop_var {s} (Γ : context ∅ s) i :
+  ctyping Σ Γ -> All_context (@sr_prop) Γ ->
+  sr_prop Γ (TVar i) (lookup_context i Γ).
 Proof.
-intros Ht. induction Ht ; (split ; [intros t' Hred | intros Γ' Hred]).
-- depelim Hred.
-- constructor. destruct (All_context_and H) as (H1 & H2).
-  now apply ctyping_red1 with Γ.
-- depelim Hred.
-- subst. destruct (All_context_and H) as (H2 & H3).
-  apply typing_conv_type with (lookup_context i Γ').
+intros HΓ HΓ'. split.
+- intros t' Hred. depelim Hred.
+- intros Γ' Hred. apply typing_conv_type with (lookup_context i Γ').
   + constructor ; auto. now apply ctyping_red1 with Γ.
   + apply lookup_context_cconv. symmetry. now apply cconv_of_cred1.
   + now apply typing_lookup_context_red1.
-- depelim Hred.
+Qed.
+
+Lemma sr_prop_lam {x s} (Γ : context ∅ s) ty body body_ty :
+  Σ ;; Γ ⊢ ty : TType -> sr_prop Γ ty TType ->
+  Σ ;; CCons Γ x ty ⊢ body : body_ty -> sr_prop (CCons Γ x ty) body body_ty ->
+  sr_prop Γ (TLam x ty body) (TProd x ty body_ty).
+Proof.
+intros Hty Hty' Hbody Hbody'. split.
+- intros t' Hred. depelim Hred.
   + apply typing_conv_type with (TProd x ty' body_ty).
     * constructor.
-      --now apply IHHt1.
-      --apply IHHt2 ; auto ; now constructor.
+      --now apply Hty'.
+      --apply Hbody' ; auto. now constructor.
     * now rewrite Hred.
     * constructor ; auto. eapply typing_validity ; eauto.
-  + constructor ; auto. apply IHHt2 ; auto.
+  + constructor ; auto. apply Hbody' ; auto.
 - constructor.
-  + now apply IHHt1.
-  + apply IHHt2 ; auto ; now constructor.
-- depelim Hred.
+  + now apply Hty'.
+  + apply Hbody' ; auto. now constructor.
+Qed.
+
+Lemma sr_prop_prod {x s} (Γ : context ∅ s) a b :
+  Σ ;; Γ ⊢ a : TType -> sr_prop Γ a TType ->
+  Σ ;; CCons Γ x a ⊢ b : TType -> sr_prop (CCons Γ x a) b TType ->
+  sr_prop Γ (TProd x a b) TType.
+Proof.
+intros Ha Ha' Hb Hb'. split.
+- intros t' Hred. depelim Hred.
   + constructor.
-    * apply IHHt1 ; auto.
-    * apply IHHt2 ; auto ; now constructor.
-  + constructor ; auto. apply IHHt2 ; auto.
-- constructor.
-  + now apply IHHt1.
-  + apply IHHt2 ; auto ; now constructor.
-- depelim Hred.
+    * now apply Ha'.
+    * apply Hb'. now constructor.
+  + constructor ; auto. apply Hb' ; auto.
+- intros Γ' Hred. constructor.
+  + now apply Ha'.
+  + apply Hb'. now constructor.
+Qed.
+
+Lemma sr_prop_app {s} (Γ : context ∅ s) f f_ty args T :
+  Σ ;; Γ ⊢ f : f_ty -> sr_prop Γ f f_ty ->
+  All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ sr_prop Γ t T) f_ty args T ->
+  sr_prop Γ (TApp f args) T.
+Proof.
+intros Hf Hf' Hargs.
+assert (Hargs' : spine_typing Σ Γ f_ty args T).
+{ revert Hargs. apply All_spine_consequence. firstorder. }
+split.
+- intros t' Hred. depelim Hred.
   + eapply typing_beta ; eauto. apply typing_app with f_ty ; eauto.
-    revert H. apply All_spine_consequence. firstorder.
-  + apply typing_app with f_ty ; [now apply IHHt |].
-    revert H. apply All_spine_consequence. firstorder.
+  + apply typing_app with f_ty ; [now apply Hf' |] ; auto.
   + assert (HT : Σ ;; Γ ⊢ T : TType).
-    {
-      eapply typing_spine_validity with f_ty args.
-      - revert H. apply All_spine_consequence. firstorder.
-      - eapply typing_validity ; eauto.
-    }
-    apply typing_spine_red1 with (args' := args') in H ; auto.
+    { eapply typing_spine_validity with f_ty args ; eauto using typing_validity. }
+    apply typing_spine_red1 with (args' := args') in Hargs ; auto.
     2: now apply OneOne2_red1_All2.
-    destruct H as (T' & H & Hconv). apply typing_conv_type with T'.
+    destruct Hargs as (T' & H' & Hconv). apply typing_conv_type with T'.
     * apply typing_app with f_ty ; auto.
     * now symmetry.
     * auto.
-- apply typing_app with f_ty ; [now apply IHHt |].
-  clear f Ht IHHt. induction H ; econstructor ; try eassumption.
-  + apply H ; auto.
-  + apply H2 ; auto.
-- depelim Hred. rewrite H0 in H2. depelim H2. cbn. simpl_subst. eapply typing_rename.
-  + apply H1 in H0. depelim H0. eassumption.
-  + split3.
-    * constructor.
-    * revert H. apply All_context_consequence. firstorder.
-    * intros i. depelim i.
-- constructor ; auto. destruct (All_context_and H) as (H2 & H3).
-  now apply ctyping_red1 with Γ.
-- apply typing_conv_type with A ; auto. now apply IHHt1.
-- apply typing_conv_type with A ; auto.
-  + now apply IHHt1.
-  + now apply IHHt2.
+- intros Γ' Hred. apply typing_app with f_ty ; [now apply Hf' |].
+  revert Hargs. apply All_spine_consequence. firstorder.
 Qed.
+
+Lemma sr_prop_evar {s} (Γ : context ∅ s) ev entry :
+  Σ ev = Some entry ->
+  ctyping Σ Γ -> All_context (@sr_prop) Γ ->
+  sr_prop Γ (TEvar ev) (wk (evar_type entry)).
+Proof.
+intros Hev HΓ HΓ'. split.
+- intros t' Hred. depelim Hred. rewrite H in Hev. depelim Hev. cbn.
+  simpl_subst. eapply typing_rename.
+  + apply HΣ in H. depelim H. eassumption.
+  + split3 ; try easy. constructor.
+- intros Γ' Hred. constructor ; auto. now apply ctyping_red1 with Γ.
+Qed.
+
+Lemma sr_prop_conv_type {s} Γ (t A B : term s) :
+  Σ ;; Γ ⊢ t : A -> sr_prop Γ t A ->
+  Σ ;; Γ ⊢ B : TType -> sr_prop Γ B TType ->
+  Σ ⊢ A ≡ B ->
+  sr_prop Γ t B.
+Proof.
+intros Ht Ht' HB HB' Hconv. split.
+- intros t' Hred. apply typing_conv_type with A ; auto. now apply Ht'.
+- intros Γ' Hred. apply typing_conv_type with A ; auto.
+  + now apply Ht'.
+  + now apply HB'.
+Qed.
+
+(** [typing] implies [sr_prop]. *)
+Lemma sr_prop_all {s} Γ (t T : term s) :
+  Σ ;; Γ ⊢ t : T ->
+  sr_prop Γ t T.
+Proof.
+intros Ht. induction Ht.
+- apply All_context_and in H. now apply sr_prop_type.
+- apply All_context_and in H. subst. now apply sr_prop_var.
+- now apply sr_prop_lam.
+- now apply sr_prop_prod.
+- now apply sr_prop_app with f_ty.
+- apply All_context_and in H. now apply sr_prop_evar.
+- now apply sr_prop_conv_type with A.
+Qed.
+
+End SubjectReduction.
 
 (***********************************************************************)
 (** * Compatibility of typing with one-step reduction. *)
@@ -253,7 +288,7 @@ Qed.
   Proper (eq ==> red1 Σ ==> eq ==> Basics.impl) (@typing Σ s).
 Proof.
 intros Γ Γ' <- t t' Ht T T' <- Htyp.
-pose proof (H := sr_prop_all Σ Γ t T Htyp HΣ). now apply H.
+pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
 Qed.
 
 (** One reduction step in the context preserves the typing derivation. *)
@@ -261,7 +296,7 @@ Qed.
   Proper (cred1 Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
 Proof.
 intros Γ Γ' HΓ t t' <- T T' <- Htyp.
-pose proof (H := sr_prop_all Σ Γ t T Htyp HΣ). now apply H.
+pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
 Qed.
 
 (** One reduction step in the type preserves the typing derivation. *)
