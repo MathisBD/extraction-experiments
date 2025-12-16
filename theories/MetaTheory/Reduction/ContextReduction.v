@@ -4,7 +4,9 @@ From Metaprog Require Export Data.Context MetaTheory.Reduction.SubstReduction.
 (** This module defines:
     - One-step reduction of contexts [cred1].
     - Multi-step reduction of contexts [cred].
-    And proves basic properties.
+    And proves basic properties, notably an alternate induction principle
+    [cred_ind_alt] which expresses the fact that [cred] is the reflexive
+    transitive closure of [cred1].
 *)
 
 (***********************************************************************)
@@ -78,6 +80,49 @@ intros Γ Γ' HΓ. induction HΓ ; constructor.
 - reflexivity.
 - reflexivity.
 - assumption.
+Qed.
+
+Lemma cred_is_clos_cred1_aux1 {s x} Σ (Γ Γ' : context ∅ s) ty :
+  refl_trans_clos (cred1 Σ) Γ Γ' ->
+  refl_trans_clos (cred1 Σ) (CCons Γ x ty) (CCons Γ' x ty).
+Proof.
+intros H. induction H.
+- reflexivity.
+- rewrite IHrefl_trans_clos. apply refl_trans_clos_one. now constructor.
+Qed.
+
+Lemma cred_is_clos_cred1_aux2 {s x} Σ (Γ : context ∅ s) ty ty' :
+  Σ ⊢ ty ~> ty' ->
+  refl_trans_clos (cred1 Σ) (CCons Γ x ty) (CCons Γ x ty').
+Proof. intros H. apply refl_trans_clos_one. now constructor. Qed.
+
+Lemma cred_is_clos_cred1 {s} Σ (Γ Γ' : context ∅ s) :
+  cred Σ Γ Γ' <-> refl_trans_clos (cred1 Σ) Γ Γ'.
+Proof.
+split ; intros H.
+- induction H.
+  + reflexivity.
+  + induction H.
+    * now apply cred_is_clos_cred1_aux1.
+    * rewrite IHred. now apply cred_is_clos_cred1_aux2.
+- induction H.
+  + reflexivity.
+  + rewrite IHrefl_trans_clos, H0. reflexivity.
+Qed.
+
+(** Alternate induction principle for [cred] which expresses the fact that
+    [cred] is the reflexive-transitive closure of [cred1]. *)
+Lemma cred_ind_alt (Σ : evar_map) (P : forall s, context ∅ s -> context ∅ s -> Prop)
+  (Hrefl : forall s Γ, P s Γ Γ)
+  (Hstep : forall s Γ1 Γ2 Γ3,
+    cred Σ Γ1 Γ2 -> P s Γ1 Γ2 ->
+    cred1 Σ Γ2 Γ3 ->
+    P s Γ1 Γ3) :
+  forall s Γ1 Γ2, cred Σ Γ1 Γ2 -> P s Γ1 Γ2.
+Proof.
+intros s Γ1 Γ2 H. rewrite cred_is_clos_cred1 in H. induction H.
+- apply Hrefl.
+- apply Hstep with y ; auto. now rewrite cred_is_clos_cred1.
 Qed.
 
 Lemma lookup_context_cred {s Σ} (i : index s) Γ Γ' :

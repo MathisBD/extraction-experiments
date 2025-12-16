@@ -283,24 +283,24 @@ End SubjectReduction.
 (** * Compatibility of typing with one-step reduction. *)
 (***********************************************************************)
 
-(** One reduction step in the term preserves the typing derivation. *)
-#[export] Instance typing_red1_term {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (eq ==> red1 Σ ==> eq ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' <- t t' Ht T T' <- Htyp.
-pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
-Qed.
-
 (** One reduction step in the context preserves the typing derivation. *)
-#[export] Instance typing_red1_context {s Σ} (HΣ : typing_evar_map Σ) :
+Lemma typing_red1_context {s Σ} (HΣ : typing_evar_map Σ) :
   Proper (cred1 Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
 Proof.
 intros Γ Γ' HΓ t t' <- T T' <- Htyp.
 pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
 Qed.
 
+(** One reduction step in the term preserves the typing derivation. *)
+Lemma typing_red1_term {s Σ} (HΣ : typing_evar_map Σ) :
+  Proper (eq ==> red1 Σ ==> eq ==> Basics.impl) (@typing Σ s).
+Proof.
+intros Γ Γ' <- t t' Ht T T' <- Htyp.
+pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
+Qed.
+
 (** One reduction step in the type preserves the typing derivation. *)
-#[export] Instance typing_red1_type {s Σ} :
+Lemma typing_red1_type {s Σ} :
   typing_evar_map Σ ->
   Proper (eq ==> eq ==> red1 Σ ==> Basics.impl) (@typing Σ s).
 Proof.
@@ -315,9 +315,45 @@ Qed.
 (** * Compatibility of typing with multi-step reduction. *)
 (***********************************************************************)
 
+Lemma typing_red_context {s Σ} (HΣ : typing_evar_map Σ) :
+  Proper (cred Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
+Proof.
+intros Γ Γ' HΓ t t' <- T T' <- Htyp. induction HΓ using cred_ind_alt.
+- assumption.
+- eapply typing_red1_context ; eauto.
+Qed.
+
+Lemma typing_red_term {s Σ} (HΣ : typing_evar_map Σ) :
+  Proper (eq ==> red Σ ==> eq ==> Basics.impl) (@typing Σ s).
+Proof.
+intros Γ Γ' <- t t' Ht T T' <- Htyp. induction Ht.
+- assumption.
+- eapply typing_red1_term ; eauto.
+Qed.
+
+Lemma typing_red_type {s Σ} (HΣ : typing_evar_map Σ) :
+  Proper (eq ==> eq ==> red Σ ==> Basics.impl) (@typing Σ s).
+Proof.
+intros Γ Γ' <- t t' <- T T' HT Htyp. induction HT.
+- assumption.
+- eapply typing_red1_type ; eauto.
+Qed.
+
 (** Reduction in the context, term, and type preserves the typing derivation. *)
 #[export] Instance typing_red {s Σ} (HΣ : typing_evar_map Σ) :
   Proper (cred Σ ==> red Σ ==> red Σ ==> Basics.impl) (@typing Σ s).
 Proof.
 intros Γ Γ' HΓ t t' Ht T T' HT Htyp.
-Admitted.
+enough (Σ ;; Γ ⊢ t' : T'). { revert H. apply typing_red_context ; auto. }
+enough (Σ ;; Γ ⊢ t : T'). { revert H. apply typing_red_term ; auto. }
+enough (Σ ;; Γ ⊢ t : T). { revert H. apply typing_red_type ; auto. }
+assumption.
+Qed.
+
+(* #[export] Instance eq_Reflexive A : Reflexive (@eq A). Admitted.
+
+(** Reduction in the context, term, and type preserves the typing derivation. *)
+#[export] Instance typing_red' {s Σ} (HΣ : typing_evar_map Σ) :
+  Proper (cred Σ ==> red Σ ==> red Σ ==> Basics.impl) (@typing Σ s).
+Proof.
+intros Γ Γ' HΓ t t' Ht T T' HT Htyp. rewrite Ht in Htyp.*)
