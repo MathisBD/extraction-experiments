@@ -12,7 +12,8 @@ From Metaprog Require Export Data.Term.
       and substitutions.
     - [simpl_subst] repeatedly rewrites with lemmas which simplify renamings
       and substitutions. A version [simpl_subst in H] is also available to
-      simplify in hypothesis [H].
+      simplify in hypothesis [H]. Note that [simpl_subst] will unfold
+      [wk] as this is almost always what you want when doing proofs.
 *)
 
 (***********************************************************************)
@@ -106,8 +107,7 @@ Tactic Notation "simpl_subst" "in" ident(H) :=
   rename_equation_3
   rename_equation_4
   rename_equation_5
-  rename_equation_6
-  : subst.
+  rename_equation_6 : subst.
 
 #[export] Hint Rewrite
   substitute_equation_1
@@ -115,8 +115,7 @@ Tactic Notation "simpl_subst" "in" ident(H) :=
   substitute_equation_3
   substitute_equation_4
   substitute_equation_5
-  substitute_equation_6
-  : subst.
+  substitute_equation_6 : subst.
 
 Lemma map_nil {A B} (f : A -> B) :
   map f [] = [].
@@ -299,7 +298,7 @@ Proof. ren_ext i. depelim i ; simpl_subst ; reflexivity. Qed.
 (** * Renaming smart constructors. *)
 (***********************************************************************)
 
-Lemma rename_lam {s s'} (ty : term s) (body : forall x, term (s ▷ x)) (ρ : ren s s') :
+(*Lemma rename_lam {s s'} (ty : term s) (body : forall x, term (s ▷ x)) (ρ : ren s s') :
   rename ρ (lam ty body) = lam (rename ρ ty) (fun x => rename (rup x ρ) (body x)).
 Proof. reflexivity. Qed.
 #[export] Hint Rewrite @rename_lam : subst.
@@ -312,7 +311,40 @@ Proof. reflexivity. Qed.
 Lemma rename_arrow {s s'} (a b : term s) (ρ : ren s s') :
   rename ρ (arrow a b) = arrow (rename ρ a) (rename ρ b).
 Proof. unfold arrow. simpl_subst. reflexivity. Qed.
-#[export] Hint Rewrite @rename_arrow : subst.
+#[export] Hint Rewrite @rename_arrow : subst.*)
+
+(***********************************************************************)
+(** * Lemmas about [tapply]. *)
+(***********************************************************************)
+
+#[export] Hint Rewrite
+  tapply_equation_1
+  tapply_equation_2
+  tapply_equation_3
+  tapply_equation_4 : subst.
+
+Lemma tapply_tid {s} (i : index s) :
+  tapply tid i = i.
+Proof.
+depind s ; depelim i ; simp tid.
+- now simpl_subst.
+- simpl_subst. f_equal. auto.
+Qed.
+#[export] Hint Rewrite @tapply_tid : subst.
+
+Lemma tapply_tcomp {s s' s''} (δ1 : thinning s s') (δ2 : thinning s' s'') i :
+  tapply (tcomp δ1 δ2) i = tapply δ2 (tapply δ1 i).
+Proof.
+funelim (tcomp δ1 δ2) ; simpl_subst.
+- depelim i.
+- f_equal. apply H.
+- f_equal. apply H.
+- f_equal. apply H.
+- depelim i ; simpl_subst.
+  + reflexivity.
+  + f_equal. apply H.
+Qed.
+#[export] Hint Rewrite @tapply_tcomp : subst.
 
 (***********************************************************************)
 (** * Lemmas about [sren]. *)
