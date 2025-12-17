@@ -25,7 +25,7 @@ Proof.
 intros H. destruct ρ ; destruct ρ'. f_equal. fun_ext i. apply H.
 Qed.
 
-Lemma thinning_ext {s s'} (δ δ' : thinning s s') :
+Lemma thin_ext {s s'} (δ δ' : thinning s s') :
   (forall i, tapply δ i = tapply δ' i) -> δ = δ'.
 Proof.
 intros H. depind δ.
@@ -49,7 +49,7 @@ Qed.
 Tactic Notation "ren_ext" ident(i) := apply ren_ext ; intros i.
 
 (** Extentionality tactic for thinnings. *)
-Tactic Notation "thinning_ext" ident(i) := apply thinning_ext ; intros i.
+Tactic Notation "thin_ext" ident(i) := apply thin_ext ; intros i.
 
 (** Extentionality tactic for substitutions. *)
 Tactic Notation "subst_ext" ident(i) := apply subst_ext ; intros i.
