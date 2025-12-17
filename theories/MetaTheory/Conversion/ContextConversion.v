@@ -37,12 +37,11 @@ Qed.
 #[export] Instance cconv_Transitive Σ s : Transitive (@cconv Σ s).
 Proof.
 intros Γ1 Γ2 Γ3 H1 H2. induction H1 ; depelim H2.
-- unfold eq_rect in H. cbn in H. depelim H. reflexivity.
-- unfold eq_rect in H3. cbn in H3. depelim H3. constructor.
-  + rewrite H. admit.
-  + apply IHcconv. admit.
-(* Equations issue: I need NoConfusionHom on [context]. *)
-Admitted.
+- reflexivity.
+- constructor.
+  + now rewrite H.
+  + now apply IHcconv.
+Qed.
 
 #[export] Instance cconv_of_cred1 Σ s : subrelation (@cred1 Σ s) (@cconv Σ s).
 Proof.

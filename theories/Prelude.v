@@ -5,6 +5,10 @@ From Metaprog Require Export Axioms.
 Export PrimString.PStringNotations.
 Export List.ListNotations.
 
+(** We allow [Equations] to use UIP instances, e.g. when deriving
+    instances of [NoConfusion] or [NoConfusionHom]. *)
+#[export] Set Equations With UIP.
+
 (** Right-associative function application. *)
 Notation "f '$' x" := (f x)
   (at level 67, right associativity, only parsing).

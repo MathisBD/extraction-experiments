@@ -35,8 +35,9 @@ intros H. depind δ.
   + specialize (H I0). simp tapply in H. depelim H.
 - depelim δ'.
   + specialize (H I0). simp tapply in H. depelim H.
-  + unfold eq_rect in H. admit. (* Equations generates a very weird goal here. *)
-Admitted.
+  + f_equal. apply IHδ. intros i. specialize (H (IS i)). simp tapply in H.
+    now depelim H.
+Qed.
 
 Lemma subst_ext {s s'} (σ σ' : subst s s') :
   (forall i, sapply σ i = sapply σ' i) -> σ = σ'.

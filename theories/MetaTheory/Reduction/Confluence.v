@@ -393,11 +393,10 @@ intros H1 H2. depind H1 ; depelim H2 ; try reflexivity.
 - depelim H1. depelim H. depelim H1.
   specialize (IHpred1 (TLam x ty' body')). feed IHpred1. { now apply pred1_lam. }
   destruct IHpred1 as (z & Hz1 & Hz2). depelim Hz1. depelim Hz2.
-  apply inj_right_sigma in H3. depelim H3.
   symmetry. eapply joinable_beta.
   + eexists ; eauto.
   + symmetry. auto.
-  + revert H4 H2. apply All2_weird_consequence. firstorder.
+  + revert H3 H2. apply All2_weird_consequence. firstorder.
 - apply joinable_app ; auto. revert H0 H3. apply All2_weird_consequence. firstorder.
 - exists (wk def). split ; [|reflexivity]. econstructor ; eassumption.
 Qed.
@@ -455,14 +454,12 @@ Lemma cred_confluence {s} Σ (Γ Γ1 Γ2 : context ∅ s) :
 Proof.
 intros H1 H2. induction s in Γ, Γ1, Γ2, H1, H2 |- *.
 - depelim Γ ; depelim Γ1 ; depelim Γ2. exists CNil. split ; constructor.
-- depelim H1. depelim H2. unfold eq_rect in H3. cbn in H3. depelim H3.
-  (* Equations issues. *)
-  assert (Γ0 = Γ) as -> by admit. assert (ty0 = ty) as -> by admit. clear H3 H5 H5'.
-  destruct (IHs Γ Γ' Γ'0 H1 H2) as (Γ1 & HΓ & HΓ').
+- depelim H1. depelim H2.
+  destruct (IHs _ _ _ H1 H2) as (Γ1 & HΓ & HΓ').
   assert (exists ty1, Σ ⊢ ty' ~~> ty1 /\ Σ ⊢ ty'0 ~~> ty1) as (ty1 & Hty1 & Hty2).
   { now apply red_confluence with ty. }
   exists (CCons Γ1 x ty1). split ; constructor ; auto.
-Admitted.
+Qed.
 
 
 

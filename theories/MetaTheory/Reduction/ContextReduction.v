@@ -66,12 +66,11 @@ Qed.
 #[export] Instance cred_Transitive Σ s : Transitive (@cred Σ s).
 Proof.
 intros Γ1 Γ2 Γ3 H1 H2. induction H1 ; depelim H2.
-- unfold eq_rect in H. cbn in H. depelim H. reflexivity.
-- unfold eq_rect in H3. cbn in H3. depelim H3. constructor.
-  + rewrite H. admit.
-  + apply IHcred. admit.
-(* Equations issue: I need NoConfusionHom on [context]. *)
-Admitted.
+- reflexivity.
+- constructor.
+  + now rewrite H.
+  + now apply IHcred.
+Qed.
 
 #[export] Instance cred_of_cred1 Σ s : subrelation (@cred1 Σ s) (@cred Σ s).
 Proof.

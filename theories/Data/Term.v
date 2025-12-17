@@ -223,7 +223,7 @@ Inductive thinning : scope -> scope -> Type :=
 | ThinSkip {s s' x} : thinning s s' -> thinning s (s' ▷ x)
 | ThinKeep {s s' x} : thinning s s' -> thinning (s ▷ x) (s' ▷ x).
 
-Derive Signature NoConfusion for thinning.
+Derive Signature NoConfusion NoConfusionHom for thinning.
 
 (** [tid] is the identity thinning. *)
 Equations tid {s} : thinning s s :=

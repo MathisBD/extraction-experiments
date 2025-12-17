@@ -173,7 +173,7 @@ Section InversionLemmas.
   apply red_lam_inv in H1, H2.
   destruct H1 as (ty1' & body1' & -> & Hty1 & Hbody1).
   destruct H2 as (ty2' & body2' & Heq & Hty2 & Hbody2).
-  depelim Heq. apply inj_right_sigma in H. depelim H. split.
+  depelim Heq. split.
   - transitivity ty1'.
     + apply conv_of_red, Hty1.
     + symmetry. apply conv_of_red, Hty2.
@@ -191,7 +191,7 @@ Section InversionLemmas.
   apply red_prod_inv in H1, H2.
   destruct H1 as (a1' & b1' & -> & Ha1 & Hb1).
   destruct H2 as (a2' & b2' & Heq & Ha2 & Hb2).
-  depelim Heq. apply inj_right_sigma in H. depelim H. split.
+  depelim Heq. split.
   - transitivity a1'.
     + apply conv_of_red, Ha1.
     + symmetry. apply conv_of_red, Ha2.
