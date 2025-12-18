@@ -110,6 +110,14 @@ Tactic Notation "simpl_subst" "in" ident(H) :=
   rename_equation_6 : subst.
 
 #[export] Hint Rewrite
+  thin_equation_1
+  thin_equation_2
+  thin_equation_3
+  thin_equation_4
+  thin_equation_5
+  thin_equation_6 : subst.
+
+#[export] Hint Rewrite
   substitute_equation_1
   substitute_equation_2
   substitute_equation_3
@@ -332,6 +340,11 @@ depind s ; depelim i ; simp tid.
 Qed.
 #[export] Hint Rewrite @tapply_tid : subst.
 
+Lemma tapply_tshift {s x} (i : index s) :
+  tapply (@tshift s x) i = IS i.
+Proof. unfold tshift. now simpl_subst. Qed.
+#[export] Hint Rewrite @tapply_tshift : subst.
+
 Lemma tapply_tcomp {s s' s''} (δ1 : thinning s s') (δ2 : thinning s' s'') i :
   tapply (tcomp δ1 δ2) i = tapply δ2 (tapply δ1 i).
 Proof.
@@ -345,6 +358,64 @@ funelim (tcomp δ1 δ2) ; simpl_subst.
   + f_equal. apply H.
 Qed.
 #[export] Hint Rewrite @tapply_tcomp : subst.
+
+(***********************************************************************)
+(** * Lemmas about thinnings. *)
+(***********************************************************************)
+
+Lemma tcomp_tid_l {s s'} (δ : thinning s s') :
+  tcomp tid δ = δ.
+Proof. thin_ext i. now simpl_subst. Qed.
+#[export] Hint Rewrite @tcomp_tid_l : subst.
+
+Lemma tcomp_tid_r {s s'} (δ : thinning s s') :
+  tcomp δ tid = δ.
+Proof. thin_ext i. now simpl_subst. Qed.
+#[export] Hint Rewrite @tcomp_tid_r : subst.
+
+Lemma ThinKeep_tid {s x} :
+  ThinKeep tid = @tid (s ▷ x).
+Proof. thin_ext i. depelim i ; reflexivity. Qed.
+#[export] Hint Rewrite @ThinKeep_tid : subst.
+
+Lemma ThinKeep_tcomp {x s s' s''} (δ1 : thinning s s') (δ2 : thinning s' s'') :
+  @ThinKeep _ _ x (tcomp δ1 δ2) = tcomp (ThinKeep δ1) (ThinKeep δ2).
+Proof. thin_ext i. depelim i ; reflexivity. Qed.
+
+Lemma tcomp_tshift_ThinKeep {x s s'} (δ : thinning s s') :
+  tcomp tshift (ThinKeep δ) = tcomp δ (@tshift s' x).
+Proof. thin_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @tcomp_tshift_ThinKeep : subst.
+
+Lemma thin_tid {s} t :
+  thin (@tid s) t = t.
+Proof.
+induction t using term_ind' ; simpl_subst ; f_equal ; try assumption.
+clear IHt. induction H ; cbn.
+- reflexivity.
+- now rewrite H, IHForall.
+Qed.
+#[export] Hint Rewrite @thin_tid : subst.
+
+Lemma thin_thin {s s' s''} (δ1 : thinning s s') (δ2 : thinning s' s'') t :
+  thin δ2 (thin δ1 t) = thin (tcomp δ1 δ2) t.
+Proof.
+induction t in s', s'', δ1, δ2 |- * using term_ind' ; simpl_subst ; f_equal.
+- apply IHt1.
+- rewrite ThinKeep_tcomp. apply IHt2.
+- apply IHt1.
+- rewrite ThinKeep_tcomp. apply IHt2.
+- apply IHt.
+- induction H ; cbn ; f_equal.
+  + apply H.
+  + apply IHForall.
+Qed.
+#[export] Hint Rewrite @thin_thin : subst.
+
+Lemma tcomp_assoc {s s' s'' s'''} (δ1 : thinning s s') (δ2 : thinning s' s'') (δ3 : thinning s'' s''') :
+  tcomp (tcomp δ1 δ2) δ3 = tcomp δ1 (tcomp δ2 δ3).
+Proof. thin_ext i. simpl_subst. reflexivity. Qed.
+#[export] Hint Rewrite @tcomp_assoc : subst.
 
 (***********************************************************************)
 (** * Lemmas about [sren]. *)

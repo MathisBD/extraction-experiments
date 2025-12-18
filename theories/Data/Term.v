@@ -230,16 +230,16 @@ Equations tid {s} : thinning s s :=
 @tid ∅ := ThinNil ;
 @tid (s ▷ α) := ThinKeep tid.
 
+(** [tshift] is the thinning which increments every index. *)
+Definition tshift {s x} : thinning s (s ▷ x) :=
+  ThinSkip tid.
+
 (** [tcomp δ1 δ2] is the composition of [δ1] followed by [δ2]. *)
 Equations tcomp {s s' s''} (δ1 : thinning s s') (δ2 : thinning s' s'') : thinning s s'' :=
 tcomp ThinNil δ2 := δ2 ;
 tcomp δ1 (ThinSkip δ2) := ThinSkip (tcomp δ1 δ2) ;
 tcomp (ThinKeep δ1) (ThinKeep δ2) := ThinKeep (tcomp δ1 δ2) ;
 tcomp (ThinSkip δ1) (ThinKeep δ2) := ThinSkip (tcomp δ1 δ2).
-
-(** Lift a thinning through a binder. *)
-Definition tup {s s'} x (δ : thinning s s') : thinning (s ▷ x) (s' ▷ x) :=
-  ThinKeep δ.
 
 (** Apply a thinning to an index. *)
 Equations tapply {s s'} : thinning s s' -> index s -> index s' :=
@@ -248,8 +248,13 @@ tapply (ThinKeep δ) I0 := I0 ;
 tapply (ThinKeep δ) (IS i) := IS (tapply δ i).
 
 (** Apply a thinning to a term. *)
-Definition thin {s s'} (δ : thinning s s') (t : term s) : term s' :=
-  rename (Ren $ tapply δ) t.
+Equations thin {s s'} (δ : thinning s s') (t : term s) : term s' :=
+thin δ TType := TType ;
+thin δ (TVar i) := TVar (tapply δ i) ;
+thin δ (TLam x ty body) := TLam x (thin δ ty) (thin (ThinKeep δ) body) ;
+thin δ (TProd x a b) := TProd x (thin δ a) (thin (ThinKeep δ) b) ;
+thin δ (TApp f args) := TApp (thin δ f) (List.map (thin δ) args) ;
+thin δ (TEvar ev) := TEvar ev.
 
 Section ThinInv.
   #[local] Notation "f <$> x" := (option_map f x)
@@ -272,8 +277,8 @@ Section ThinInv.
   Equations thin_inv {s s'} : thinning s s' -> term s' -> option (term s) :=
   thin_inv δ TType := Some TType ;
   thin_inv δ (TVar i) := TVar <$> tapply_inv δ i ;
-  thin_inv δ (TLam x ty body) := (TLam x <$> thin_inv δ ty) <*> thin_inv (tup x δ) body ;
-  thin_inv δ (TProd x a b) := (TProd x <$> thin_inv δ a) <*> thin_inv (tup x δ) b ;
+  thin_inv δ (TLam x ty body) := (TLam x <$> thin_inv δ ty) <*> thin_inv (ThinKeep δ) body ;
+  thin_inv δ (TProd x a b) := (TProd x <$> thin_inv δ a) <*> thin_inv (ThinKeep δ) b ;
   thin_inv δ (TApp f args) := (TApp <$> thin_inv δ f) <*> option_sequence (List.map (thin_inv δ) args) ;
   thin_inv δ (TEvar e) := Some (TEvar e).
 
