@@ -45,7 +45,7 @@ Qed.
 (***********************************************************************)
 
 Section All_spine.
-  Context {s : scope} (Σ : evar_map).
+  Context (Σ : evar_map) {s : scope}.
   Context (P : term s -> term s -> Prop).
 
   (** [All_spine Σ P] lifts the relation [P] to a spine of arguments.
@@ -65,7 +65,7 @@ End All_spine.
 
 Derive Signature for All_spine.
 
-Lemma All_spine_consequence {s Σ} {P Q : term s -> term s -> Prop} :
+Lemma All_spine_consequence {Σ s} {P Q : term s -> term s -> Prop} :
   (forall t T, P t T -> Q t T) ->
   forall f_ty args (T : term s),
     All_spine Σ P f_ty args T ->
@@ -77,7 +77,7 @@ Qed.
 (** In [All_spine Σ P f_ty args T] we can change the function type [f_ty]
     to a convertible one, as long as we are willing to accept that the return
     type [T] also changes to a convertible one. *)
-Lemma All_spine_conv_func_type {s} Σ P f_ty f_ty' args (T : term s) :
+Lemma All_spine_conv_func_type {Σ s} P f_ty f_ty' args (T : term s) :
   All_spine Σ P f_ty args T ->
   Σ ⊢ f_ty ≡ f_ty' ->
   exists T',

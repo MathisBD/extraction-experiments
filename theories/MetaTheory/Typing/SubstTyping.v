@@ -10,7 +10,7 @@ From Metaprog Require Export MetaTheory.Typing.EvarMapTyping.
 
 (** [Σ ;; Γ ⊢ᵣ ρ : Δ] means that the renaming [ρ] maps well-typed terms
     in context [Γ] to well-typed terms in context [Δ]. *)
-Definition rtyping {s s'} (Σ : evar_map) (Γ : context ∅ s) (ρ : ren s s') (Δ : context ∅ s') :=
+Definition rtyping (Σ : evar_map) {s s'} (Γ : context ∅ s) (ρ : ren s s') (Δ : context ∅ s') :=
   ctyping Σ Γ /\
   ctyping Σ Δ /\
   forall i, rename ρ (lookup_context i Γ) = lookup_context (rapply ρ i) Δ.
@@ -24,12 +24,12 @@ Notation "Σ ;; Γ ⊢ᵣ ρ : Δ" := (rtyping Σ Γ ρ Δ)
 
 (** [Σ ;; Γ ⊢ₛ σ : Δ] means that the substitution [σ] maps well-typed
     terms in context [Γ] to well-typed terms in context [Δ]. *)
-Definition typing_subst {s s'} Σ (Γ : context ∅ s) (σ : subst s s') (Δ : context ∅ s') :=
+Definition styping (Σ : evar_map) {s s'} (Γ : context ∅ s) (σ : subst s s') (Δ : context ∅ s') :=
   ctyping Σ Γ /\
   ctyping Σ Δ /\
   forall i, Σ ;; Δ ⊢ sapply σ i : substitute σ (lookup_context i Γ).
 
-Notation "Σ ;; Γ ⊢ₛ σ : Δ" := (typing_subst Σ Γ σ Δ)
+Notation "Σ ;; Γ ⊢ₛ σ : Δ" := (styping Σ Γ σ Δ)
   (at level 50, Γ at next level, σ at next level, Δ at next level).
 
 (***********************************************************************)

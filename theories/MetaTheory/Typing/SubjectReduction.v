@@ -13,7 +13,7 @@ From Metaprog Require Export MetaTheory.Typing.Validity.
 
 (** In a spine typing judgement, if the function type [f_ty] is well-typed
     than so is the result type [T]. *)
-Lemma typing_spine_validity {s} Σ Γ (f_ty : term s) args T :
+Lemma typing_spine_validity {Σ s} Γ (f_ty : term s) args T :
   All_spine Σ (typing Σ Γ) f_ty args T ->
   Σ ;; Γ ⊢ f_ty : TType ->
   Σ ;; Γ ⊢ T : TType.
@@ -41,14 +41,18 @@ Context (Σ : evar_map) (HΣ : typing_evar_map Σ).
     - One reduction step in the context [Γ] preserves the type.
 
     This corresponds exactly to the property [sr_prop Γ t T].
-    Our objective is then to show that [typing] implies [sr_prop]. *)
+    Our objective is then to show that [typing] implies [sr_prop].
+
+    A technical detail is that we fix the reduction flags to [red_flags_all]
+    in [sr_prop]: as a second (easy) step we prove that we can in fact
+    reduce using any reduction flags. *)
 Definition sr_prop {s} Γ (t T : term s) :=
   (forall t', Σ ⊢ t ~> t' -> Σ ;; Γ ⊢ t' : T) /\
-  (forall Γ', cred1 Σ Γ Γ' -> Σ ;; Γ' ⊢ t : T).
+  (forall Γ', cred1 red_flags_all Σ Γ Γ' -> Σ ;; Γ' ⊢ t : T).
 
 Lemma ctyping_red1 {s} (Γ Γ' : context ∅ s) :
   All_context (@sr_prop) Γ ->
-  cred1 Σ Γ Γ' ->
+  cred1 red_flags_all Σ Γ Γ' ->
   ctyping Σ Γ ->
   ctyping Σ Γ'.
 Proof.
@@ -66,7 +70,7 @@ Qed.
 Lemma typing_lookup_context_red1 {s} (Γ Γ' : context ∅ s) i :
   All_context (@sr_prop) Γ ->
   ctyping Σ Γ ->
-  cred1 Σ Γ Γ' ->
+  cred1 red_flags_all Σ Γ Γ' ->
   Σ ;; Γ' ⊢ lookup_context i Γ : TType.
 Proof.
 intros Hsr HΓ Hred. induction Hred.
@@ -113,7 +117,7 @@ intros Hspine Hred. revert f_ty T Hspine. induction Hred ; intros f_ty T Hspine.
 Qed.
 
 Lemma OneOne2_red1_All2 {s} (xs ys : list (term s)) :
-  OnOne2 (red1 Σ) xs ys ->
+  OnOne2 (red1 red_flags_all Σ) xs ys ->
   All2 (fun x y => Σ ⊢ x ~> y \/ x = y) xs ys.
 Proof.
 intros H. induction H ; constructor ; auto.
@@ -125,7 +129,7 @@ Lemma typing_beta {s} Γ x ty body arg args (T : term s) :
   Σ ;; Γ ⊢ TApp (TLam x ty body) (arg :: args) : T ->
   Σ ;; Γ ⊢ TApp (body[x := arg]) args : T.
 Proof.
-intros H. pose proof (HT := typing_validity _ _ _ _ HΣ H).
+intros H. pose proof (HT := typing_validity _ _ _ HΣ H).
 apply typing_app_inv in H. destruct H as (f_ty & T' & H1 & H2 & H3).
 apply typing_conv_type with T' ; [|assumption..]. clear T H3 HT.
 
@@ -242,9 +246,9 @@ Lemma sr_prop_evar {s} (Γ : context ∅ s) ev entry :
   sr_prop Γ (TEvar ev) (wk (evar_type entry)).
 Proof.
 intros Hev HΓ HΓ'. split.
-- intros t' Hred. depelim Hred. rewrite H in Hev. depelim Hev. cbn.
+- intros t' Hred. depelim Hred. rewrite H0 in Hev. depelim Hev. cbn.
   simpl_subst. eapply typing_rename.
-  + apply HΣ in H. depelim H. eassumption.
+  + apply HΣ in H0. depelim H0. eassumption.
   + split3 ; try easy. constructor.
 - intros Γ' Hred. constructor ; auto. now apply ctyping_red1 with Γ.
 Qed.
@@ -283,77 +287,83 @@ End SubjectReduction.
 (** * Compatibility of typing with one-step reduction. *)
 (***********************************************************************)
 
-(** One reduction step in the context preserves the typing derivation. *)
-Lemma typing_red1_context {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (cred1 Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' HΓ t t' <- T T' <- Htyp.
-pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
-Qed.
+Section TypingRed1.
+  Context {flags : red_flags} {Σ : evar_map} {s : scope}.
+  Hypothesis (HΣ : typing_evar_map Σ).
 
-(** One reduction step in the term preserves the typing derivation. *)
-Lemma typing_red1_term {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (eq ==> red1 Σ ==> eq ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' <- t t' Ht T T' <- Htyp.
-pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). now apply H.
-Qed.
+  (** One reduction step in the context preserves the typing derivation. *)
+  Lemma typing_red1_context :
+    Proper (cred1 flags Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' HΓ t t' <- T T' <- Htyp.
+  pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). apply H.
+  revert HΓ. apply cred1_extend_flags, red_flags_incl_all_r.
+  Qed.
 
-(** One reduction step in the type preserves the typing derivation. *)
-Lemma typing_red1_type {s Σ} :
-  typing_evar_map Σ ->
-  Proper (eq ==> eq ==> red1 Σ ==> Basics.impl) (@typing Σ s).
-Proof.
-intros HΣ Γ Γ' <- t t' <- T T' HT Htyp.
-apply typing_conv_type with T.
-- assumption.
-- now rewrite HT.
-- eapply typing_red1_term ; eauto. now apply typing_validity in Htyp.
-Qed.
+  (** One reduction step in the term preserves the typing derivation. *)
+  Lemma typing_red1_term :
+    Proper (eq ==> red1 flags Σ ==> eq ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' <- t t' Ht T T' <- Htyp.
+  pose proof (H := sr_prop_all Σ HΣ Γ t T Htyp). apply H.
+  revert Ht. apply red1_extend_flags, red_flags_incl_all_r.
+  Qed.
+
+  (** One reduction step in the type preserves the typing derivation. *)
+  Lemma typing_red1_type :
+    Proper (eq ==> eq ==> red1 flags Σ ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' <- t t' <- T T' HT Htyp.
+  apply typing_conv_type with T.
+  - assumption.
+  - apply (red1_extend_flags (red_flags_incl_all_r _)) in HT.
+    now rewrite HT.
+  - eapply typing_red1_term ; eauto. now apply typing_validity in Htyp.
+  Qed.
+
+End TypingRed1.
 
 (***********************************************************************)
 (** * Compatibility of typing with multi-step reduction. *)
 (***********************************************************************)
 
-Lemma typing_red_context {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (cred Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' HΓ t t' <- T T' <- Htyp. induction HΓ using cred_ind_alt.
-- assumption.
-- eapply typing_red1_context ; eauto.
-Qed.
+Section TypingRed.
+  Context {flags : red_flags} {Σ : evar_map} {s : scope}.
+  Hypothesis (HΣ : typing_evar_map Σ).
 
-Lemma typing_red_term {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (eq ==> red Σ ==> eq ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' <- t t' Ht T T' <- Htyp. induction Ht.
-- assumption.
-- eapply typing_red1_term ; eauto.
-Qed.
+  Lemma typing_red_context :
+    Proper (cred flags Σ ==> eq ==> eq ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' HΓ t t' <- T T' <- Htyp. induction HΓ using cred_ind_alt.
+  - assumption.
+  - eapply typing_red1_context ; eauto.
+  Qed.
 
-Lemma typing_red_type {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (eq ==> eq ==> red Σ ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' <- t t' <- T T' HT Htyp. induction HT.
-- assumption.
-- eapply typing_red1_type ; eauto.
-Qed.
+  Lemma typing_red_term :
+    Proper (eq ==> red flags Σ ==> eq ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' <- t t' Ht T T' <- Htyp. induction Ht.
+  - assumption.
+  - eapply typing_red1_term ; eauto.
+  Qed.
 
-(** Reduction in the context, term, and type preserves the typing derivation. *)
-#[export] Instance typing_red {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (cred Σ ==> red Σ ==> red Σ ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' HΓ t t' Ht T T' HT Htyp.
-enough (Σ ;; Γ ⊢ t' : T'). { revert H. apply typing_red_context ; auto. }
-enough (Σ ;; Γ ⊢ t : T'). { revert H. apply typing_red_term ; auto. }
-enough (Σ ;; Γ ⊢ t : T). { revert H. apply typing_red_type ; auto. }
-assumption.
-Qed.
+  Lemma typing_red_type :
+    Proper (eq ==> eq ==> red flags Σ ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' <- t t' <- T T' HT Htyp. induction HT.
+  - assumption.
+  - eapply typing_red1_type ; eauto.
+  Qed.
 
-(* #[export] Instance eq_Reflexive A : Reflexive (@eq A). Admitted.
+  (** Reduction in the context, term, and type preserves the typing derivation. *)
+  #[export] Instance typing_red :
+    Proper (cred flags Σ ==> red flags Σ ==> red flags Σ ==> Basics.impl) (@typing Σ s).
+  Proof.
+  intros Γ Γ' HΓ t t' Ht T T' HT Htyp.
+  enough (Σ ;; Γ ⊢ t' : T'). { revert H. apply typing_red_context ; auto. }
+  enough (Σ ;; Γ ⊢ t : T'). { revert H. apply typing_red_term ; auto. }
+  enough (Σ ;; Γ ⊢ t : T). { revert H. apply typing_red_type ; auto. }
+  assumption.
+  Qed.
 
-(** Reduction in the context, term, and type preserves the typing derivation. *)
-#[export] Instance typing_red' {s Σ} (HΣ : typing_evar_map Σ) :
-  Proper (cred Σ ==> red Σ ==> red Σ ==> Basics.impl) (@typing Σ s).
-Proof.
-intros Γ Γ' HΓ t t' Ht T T' HT Htyp. rewrite Ht in Htyp.*)
+End TypingRed.

@@ -7,7 +7,7 @@ From Metaprog Require Export MetaTheory.Typing.SubstTyping.
     - Uniqueness of types (up to conversion).
 *)
 
-Lemma typing_lookup_context {s} Σ (Γ : context ∅ s) i :
+Lemma typing_lookup_context {Σ s} (Γ : context ∅ s) i :
   ctyping Σ Γ ->
   Σ ;; Γ ⊢ lookup_context i Γ : TType.
 Proof.
@@ -26,7 +26,7 @@ Qed.
 
 (** The validity lemma for typing states that in any typing derivation,
     the type is well-typed. *)
-Lemma typing_validity {s} Σ Γ (t T : term s) :
+Lemma typing_validity {Σ s} Γ (t T : term s) :
   typing_evar_map Σ ->
   Σ ;; Γ ⊢ t : T ->
   Σ ;; Γ ⊢ T : TType.
@@ -62,7 +62,7 @@ Qed.
 
 (** Types are unique (up to convertibility). This lemma will no longer be true
     once we add subtyping (with universes). *)
-Lemma typing_unique_type {s} Σ Γ (t A A' : term s) :
+Lemma typing_unique_type {Σ s} Γ (t A A' : term s) :
   Σ ;; Γ ⊢ t : A ->
   Σ ;; Γ ⊢ t : A' ->
   Σ ⊢ A ≡ A'.
