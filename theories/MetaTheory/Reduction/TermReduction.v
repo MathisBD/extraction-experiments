@@ -1,5 +1,5 @@
 From Metaprog Require Import Prelude.
-From Metaprog.MetaTheory Require Export Relations Substitution EvarMap.
+From Metaprog.MetaTheory Require Export Substitution EvarMap.
 
 (** This module defines:
     - The one-step strong reduction relation [red1] on terms.

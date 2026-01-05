@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude.
+From Metaprog Require Import Prelude Relations.
 From Metaprog Require Export Data.Context MetaTheory.Reduction.SubstReduction.
 
 (** This module defines:

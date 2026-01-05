@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude.
+From Metaprog Require Import Prelude Relations.
 From Metaprog.MetaTheory Require Export Reduction.ContextReduction.
 
 (** This module proves the confluence lemma for the multi-step reduction
