@@ -325,7 +325,7 @@ Section UnifyStep.
     else ret false ;
   unify_meta_same _ _ _ := ret false.
 
-  (** Get the index of a variable. Returns [None] if the term is not a variable. *)
+  (** Get the index of a variable. Rets [None] if the term is not a variable. *)
   Definition dest_var {s} (t : term s) : meta E (option (index s)) :=
     let% t := whd_evars t in
     match t with
@@ -399,7 +399,7 @@ Section UnifyStep.
   context_indices_aux CNil := [] ;
   context_indices_aux (CCons Γ _ _) := I0 :: map IS (context_indices_aux Γ).
 
-  (** Returns the indices in [Γ] as [n; ... 3; 2; 1; 0]. *)
+  (** Rets the indices in [Γ] as [n; ... 3; 2; 1; 0]. *)
   Definition context_indices {s s'} (Γ : context s s') : list (index s') :=
     rev (context_indices_aux Γ).
 

@@ -62,8 +62,8 @@ Fixpoint run_command_rec {A} (n : fuel) (fs : Vec.t (fun_entry commandE))
   (evm : ocaml_evar_map) (t : meta commandE A) : ocaml_evar_map * A :=
   match n with NoFuel => ocaml_handle_Fail _ "run_command_rec: out of fuel (should not happen)" | OneMoreFuel n =>
   match t with
-  (* Return. *)
-  | Return x => (evm, x)
+  (* Ret. *)
+  | Ret x => (evm, x)
   (* Bind. *)
   | Bind t f =>
     let (evm, x) := run_command_rec n fs evm t in

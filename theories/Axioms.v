@@ -1,6 +1,5 @@
-(** This module lists the basic axioms we use. Indeed we don't try to keep
-    the formalization axiom-free. We also don't go directly to full classical
-    logic, but try to only use axioms which really make our like easier. *)
+(** This module lists the basic axioms we use. We don't go directly to full
+    classical logic, but try to only use axioms which really make our like easier. *)
 
 (** Functional extensionality: two dependent functions
     are equal if they are pointwise equal. *)

@@ -7,41 +7,76 @@ From Metaprog Require Import Prelude.
 
     Specific effects are defined in modules [Effects.XXX]. *)
 
+(***********************************************************************)
 (** * Meta-programming monad. *)
+(***********************************************************************)
 
 (** [meta E A] represents a computation with return value in [A]
     and using the set of effects [E]. *)
 Inductive meta (E : Type -> Type) : Type -> Type :=
-(** [Return a] is a trivial computation which yields a value [a]. *)
-| Return {A} : A -> meta E A
+(** [Ret a] is a trivial computation which yields a value [a]. *)
+| Ret {A} : A -> meta E A
 (** [Bind t f] executes [t] resulting in a value [a : A], then executes [f a]. *)
 | Bind {A B} : meta E A -> (A -> meta E B) -> meta E B
 (** [Vis e] triggers an event [e].
     See modules [Effects.XXX] for definitions of specific effects. *)
 | Vis {A} : E A -> meta E A.
 
-Arguments Return {E A}.
+Arguments Ret {E A}.
 Arguments Bind {E A B}.
 Arguments Vis {E A}.
 
-(** * Sub-effects. *)
+(***********************************************************************)
+(** * Sum of effects. *)
+(***********************************************************************)
 
-(** [SubEffect E F] or [E -< F] means that [E] is a
-    sub-effect of [F]: every event [e : E A] can be cast to an event [F A]. *)
-Class SubEffect (E F : Type -> Type) := {
-  inj_effect : forall A, E A -> F A
+Variant sumE (E F : Type -> Type) : Type -> Type :=
+| sumE_l A : E A -> sumE E F A
+| sumE_r A : F A -> sumE E F A.
+
+Arguments sumE_l {E F A}.
+Arguments sumE_r {E F A}.
+
+Notation "E '+'' F" := (sumE E F) (at level 30, right associativity).
+
+(***********************************************************************)
+(** * Sub-effects. *)
+(***********************************************************************)
+
+(** [subeffect E F] or [E -< F] means that [E] is a sub-effect of [F]:
+    every event [e : E A] can be cast to an event [F A]. *)
+Class subeffect (E F : Type -> Type) : Type := {
+  inj_event : forall A, E A -> F A
 }.
 
-Arguments inj_effect {E F _ A}.
+Arguments inj_event {E F _ A}.
 
-Notation "E '-<' F" := (SubEffect E F) (at level 60, no associativity).
+Notation "E '-<' F" := (subeffect E F) (at level 60, no associativity).
 
 Definition trigger {E F A} `{E -< F} (e : E A) : meta F A :=
-  Vis (inj_effect e).
+  Vis (inj_event e).
 
+(** We setup typeclass search for [subeffect] such that the search can't loop:
+    instead of declaring a transitivity instance we bake transitivity
+    inside specific rules e.g. [subeffect_sum_l]. *)
+
+#[export] Instance subeffect_refl E : E -< E := {|
+  inj_event _ e := e
+|}.
+
+#[export] Instance subeffect_sum_l E F1 F2 (H : E -< F1) : E -< F1 +' F2 := {|
+  inj_event _ e := sumE_l (inj_event e)
+|}.
+
+#[export] Instance subeffect_sum_r E F1 F2 (H : E -< F2) : E -< F1 +' F2 := {|
+  inj_event _ e := sumE_r (inj_event e)
+|}.
+
+(***********************************************************************)
 (** * Monadic combinators. *)
+(***********************************************************************)
 
-Definition ret {E A} (a : A) : meta E A := Return a.
+Definition ret {E A} (a : A) : meta E A := Ret a.
 
 (** Infix notation for [Bind]. *)
 Notation "t >>= f" := (Bind t f)

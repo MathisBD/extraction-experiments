@@ -125,22 +125,27 @@ Definition eq1 {A} {B : A -> Type} (R : forall a, relation (B a)) : relation (fo
   bot := fun a => bot (X := B a);
   top := fun a => top (X := B a)
 |}.
+Next Obligation. auto. Qed.
+Next Obligation. depelim H. Qed.
 Next Obligation.
 split.
 - intros f a. reflexivity.
 - intros f g h H1 H2 a. transitivity (g a) ; [apply H1 | apply H2].
 Qed.
-Next Obligation. unfold eq1. setoid_rewrite weq_spec. firstorder. Qed.
-Next Obligation. unfold eq1. setoid_rewrite leq_isup_x. firstorder. Qed.
-Next Obligation. unfold eq1. setoid_rewrite leq_x_iinf. firstorder. Qed.
-Next Obligation. unfold eq1. setoid_rewrite leq_cup_x. firstorder. Qed.
-Next Obligation. unfold eq1. setoid_rewrite leq_x_cap. firstorder. Qed.
-Next Obligation. unfold eq1. apply leq_x_top. Qed.
-Next Obligation. unfold eq1. apply leq_bot_x. Qed.
+Next Obligation. unfold eq1. intros. setoid_rewrite weq_spec. firstorder. Qed.
+Next Obligation. unfold eq1. intros. setoid_rewrite leq_isup_x. firstorder. Qed.
+Next Obligation. unfold eq1. intros. setoid_rewrite leq_x_iinf. firstorder. Qed.
+Next Obligation. unfold eq1. intros. setoid_rewrite leq_cup_x. firstorder. Qed.
+Next Obligation. unfold eq1. intros. setoid_rewrite leq_x_cap. firstorder. Qed.
+Next Obligation. unfold eq1. intros. apply leq_x_top. Qed.
+Next Obligation. unfold eq1. intros. apply leq_bot_x. Qed.
 
 (***********************************************************************)
 (** * Basic opeartions and properties. *)
 (***********************************************************************)
+
+Definition monotone {A B} `{CompleteLattice A} `{CompleteLattice B} (f : A -> B) :=
+  Proper (leq ==> leq) f.
 
 Section Basics.
   Context {X : Type} {LX : CompleteLattice X}.
@@ -205,7 +210,7 @@ End Basics.
 
 Section LeastFixpoint.
   Context {X : Type} {L : CompleteLattice X} (F : X -> X).
-  Hypothesis (Hmono : Proper (leq ==> leq) F).
+  Hypothesis (Hmono : monotone F).
 
   (** The set of (transfinite) iterations of [F]. *)
   Inductive lfp_chain : X -> Prop :=
@@ -258,7 +263,7 @@ End LeastFixpoint.
 
 Section GreatestFixpoint.
   Context {X : Type} {L : CompleteLattice X} (F : X -> X).
-  Hypothesis (Hmono : Proper (leq ==> leq) F).
+  Hypothesis (Hmono : monotone F).
 
   (** The set of (transfinite) iterations of [F]. *)
   Inductive gfp_chain : X -> Prop :=

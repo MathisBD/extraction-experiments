@@ -1,4 +1,4 @@
-From Stdlib Require Export Bool Nat List Lia PrimString Relations Morphisms.
+From Stdlib Require Export Bool Nat List Lia PrimString Relations Morphisms Program.
 From Equations Require Export Equations.
 From Metaprog Require Export Axioms.
 
@@ -8,6 +8,9 @@ Export List.ListNotations.
 (** We allow [Equations] to use UIP instances, e.g. when deriving
     instances of [NoConfusion] or [NoConfusionHom]. *)
 #[export] Set Equations With UIP.
+
+(** Replace [Program]'s default obligation tactic. *)
+#[export] Obligation Tactic := cbn beta zeta iota.
 
 (** Right-associative function application. *)
 Notation "f '$' x" := (f x)
@@ -35,7 +38,7 @@ Ltac feed3 H := feed H ; [| feed2 H].
 Ltac feed4 H := feed H ; [| feed3 H].
 
 (** Compute the sum of a list of naturals.
-    Returns [0] if the list is empty. *)
+    Rets [0] if the list is empty. *)
 Equations sum : list nat -> nat :=
 sum [] := 0 ;
 sum (x :: xs) := x + sum xs.

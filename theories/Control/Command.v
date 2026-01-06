@@ -18,21 +18,21 @@ Arguments command_rec {A}.
 Arguments command_evar {A}.
 
 #[export] Instance subeffect_printE_commandE : printE -< commandE := {
-  inj_effect := @command_print
+  inj_event := @command_print
 }.
 
 #[export] Instance subeffect_failE_commandE : failE -< commandE := {
-  inj_effect := @command_fail
+  inj_event := @command_fail
 }.
 
 #[export] Instance subeffect_iterE_commandE : iterE commandE -< commandE := {
-  inj_effect := @command_iter
+  inj_event := @command_iter
 }.
 
 #[export] Instance subeffect_recE_commandE : recE commandE -< commandE := {
-  inj_effect := @command_rec
+  inj_event := @command_rec
 }.
 
 #[export] Instance subeffect_evarE_commandE : evarE -< commandE := {
-  inj_effect := @command_evar
+  inj_event := @command_evar
 }.

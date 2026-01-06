@@ -11,15 +11,15 @@ Variant evarE : Type -> Type :=
 Section EvarOperations.
   Context {E} `{evarE -< E}.
 
-  (** Create a fresh evar with the given type. Returns the id of the new evar. *)
+  (** Create a fresh evar with the given type. Rets the id of the new evar. *)
   Definition fresh_evar (ty : term ∅) : meta E evar_id :=
     trigger (FreshEvar ty).
 
-  (** Lookup the entry associated to an evar. Returns [None] if the evar doesn't exist. *)
+  (** Lookup the entry associated to an evar. Rets [None] if the evar doesn't exist. *)
   Definition lookup_evar (ev : evar_id) : meta E (option evar_entry) :=
     trigger (LookupEvar ev).
 
-  (** Get the type of an evar. Returns [None] if the evar doesn't exist. *)
+  (** Get the type of an evar. Rets [None] if the evar doesn't exist. *)
   Definition lookup_evar_type (ev : evar_id) : meta E (option (term ∅)) :=
     let% entry_opt := lookup_evar ev in
     match entry_opt with
@@ -27,7 +27,7 @@ Section EvarOperations.
     | None => ret None
     end.
 
-  (** Get the definition of an evar. Returns [None] if the evar doesn't exist
+  (** Get the definition of an evar. Rets [None] if the evar doesn't exist
       of doesn't have a definition. *)
   Definition lookup_evar_def (ev : evar_id) : meta E (option (term ∅)) :=
     let% entry_opt := lookup_evar ev in

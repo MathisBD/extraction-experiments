@@ -272,7 +272,7 @@ Section ThinInv.
   tapply_inv (ThinKeep δ) (IS i) := IS <$> tapply_inv δ i.
 
   (** [thin_inv δ t'] is the partial inverse of [thin]: if computes a term [t]
-      such that [thin δ t = t']. Returns [None] if [t'] uses variables which are
+      such that [thin δ t = t']. Rets [None] if [t'] uses variables which are
       not in the domain of the thinning [δ]. *)
   Equations thin_inv {s s'} : thinning s s' -> term s' -> option (term s) :=
   thin_inv δ TType := Some TType ;

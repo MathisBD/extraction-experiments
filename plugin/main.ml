@@ -13,7 +13,7 @@ let with_warning (warn : string) (f : unit -> 'a) : 'a =
   CWarnings.set_flags warnings;
   res
 
-(** Recursively extract a constant. Returns the name of the created .ml file. *)
+(** Recursively extract a constant. Rets the name of the created .ml file. *)
 let extract ~opaque_access ~dir (ref : Libnames.qualid) : string =
   let ml_file = dir </> "extracted.ml" in
   let mli_file = dir </> "extracted.mli" in
