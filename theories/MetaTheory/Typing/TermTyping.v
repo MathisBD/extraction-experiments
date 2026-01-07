@@ -91,6 +91,16 @@ intros Hspine Hconv. induction Hspine in f_ty', Hconv |- *.
   exists T'. split ; auto. econstructor ; eauto. now rewrite <-Hconv.
 Qed.
 
+Lemma All_spine_app {Σ s} P (A B C : term s) args args' :
+  All_spine Σ P A args B ->
+  All_spine Σ P B args' C ->
+  All_spine Σ P A (args ++ args') C.
+Proof.
+intros H H'. depind H ; cbn.
+- assumption.
+- econstructor ; eauto.
+Qed.
+
 (***********************************************************************)
 (** * Typing relation on terms. *)
 (***********************************************************************)

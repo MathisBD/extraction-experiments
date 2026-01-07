@@ -220,4 +220,3 @@ Section InversionLemmas.
   Qed.
 
 End InversionLemmas.
-

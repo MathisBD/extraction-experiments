@@ -21,7 +21,7 @@ Unset Elimination Schemes.
 Inductive pred1 (flags : red_flags) (Σ : evar_map) {s} : term s -> term s -> Prop :=
 
 (** Beta-reduction rule. *)
-| pred1_app_beta x ty body body' arg arg' args args' :
+| pred1_beta x ty body body' arg arg' args args' :
     flags.(beta) = true ->
     Σ ⊢ body >>{flags} body' ->
     Σ ⊢ arg >>{flags} arg' ->
@@ -33,6 +33,18 @@ Inductive pred1 (flags : red_flags) (Σ : evar_map) {s} : term s -> term s -> Pr
     flags.(evars) = true ->
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
     Σ ⊢ TEvar ev >>{flags} wk def
+
+(** Remove empty applications. *)
+| pred1_empty_app f f' :
+    Σ ⊢ f >>{flags} f' ->
+    Σ ⊢ TApp f [] >>{flags} f'
+
+(** Merge nested applications. *)
+| pred1_nested_app f f' args1 args1' args2 args2' :
+    Σ ⊢ f >>{flags} f' ->
+    All2 (pred1 flags Σ) args1 args1' ->
+    All2 (pred1 flags Σ) args2 args2' ->
+    Σ ⊢ TApp (TApp f args1) args2 >>{flags} TApp f' (args1' ++ args2')
 
 (** Congruence rules. *)
 
@@ -102,6 +114,14 @@ Lemma pred1_ind flags Σ (P : forall s, term s -> term s -> Prop)
     flags.(evars) = true ->
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
     P s (TEvar ev) (wk def))
+  (Hempty : forall s f f',
+    Σ ⊢ f >>{flags} f' -> P s f f' ->
+    P s (TApp f []) f')
+  (Hnested : forall s f f' args1 args1' args2 args2',
+    Σ ⊢ f >>{flags} f' -> P s f f' ->
+    All2 (pred1 flags Σ) args1 args1' -> All2 (P s) args1 args1' ->
+    All2 (pred1 flags Σ) args2 args2' -> All2 (P s) args2 args2' ->
+    P s (TApp (TApp f args1) args2) (TApp f' (args1' ++ args2')))
   (Htype : forall s,
     P s TType TType)
   (Hvar : forall s i,
@@ -124,10 +144,15 @@ Lemma pred1_ind flags Σ (P : forall s, term s -> term s -> Prop)
 Proof.
 fix IH 4. intros s t t' Hred. destruct Hred.
 - apply Hbeta ; try assumption ; try now apply IH.
-  revert args args' H0. fix IHargs 3. intros args args' H0. destruct H0.
-  + constructor.
-  + constructor ; auto.
+  revert args args' H0. fix IHargs 3. intros args args' H0.
+  destruct H0 ; constructor ; auto.
 - apply Hexpand with ty ; assumption.
+- apply Hempty ; try assumption ; auto.
+- apply Hnested ; try assumption ; auto.
+  + revert args1 args1' H. fix IHargs 3. intros args1 args1' H.
+    destruct H ; constructor ; auto.
+  + revert args2 args2' H0. fix IHargs 3. intros args2 args2' H0.
+    destruct H0 ; constructor ; auto.
 - apply Htype.
 - apply Hvar.
 - apply Hlam ; auto.
@@ -146,10 +171,10 @@ Section RelatingPredRed.
   Context {flags : red_flags} {Σ : evar_map}.
 
   (** [pred1] admits the beta rule. *)
-  Lemma pred1_beta {s} x (ty : term s) body arg args :
+  (*Lemma pred1_beta {s} x (ty : term s) body arg args :
     flags.(beta) = true ->
     Σ ⊢ TApp (TLam x ty body) (arg :: args) >>{flags} TApp (body[x := arg]) args.
-  Proof. intros H. now apply pred1_app_beta. Qed.
+  Proof. intros H. now apply pred1_app_beta. Qed.*)
 
   (** One-step reduction is included in parallel reduction. *)
   Lemma pred1_of_red1 {s} (t u : term s) :
@@ -158,6 +183,8 @@ Section RelatingPredRed.
   intros H. induction H.
   - now apply pred1_beta.
   - eapply pred1_evar_expand ; eassumption.
+  - now apply pred1_empty_app.
+  - now apply pred1_nested_app.
   - now apply pred1_lam.
   - now apply pred1_lam.
   - now apply pred1_prod.
@@ -177,6 +204,10 @@ Section RelatingPredRed.
     + now constructor.
     + assumption.
   - eapply red_evar_expand ; eassumption.
+  - now rewrite red1_empty_app.
+  - rewrite red1_nested_app. f_equiv.
+    + assumption.
+    + now apply All2_app.
   - reflexivity.
   - reflexivity.
   - now apply red_lam_congr.
@@ -205,21 +236,21 @@ End RelatingPredRed.
 Section Substitutivity.
   Context {flags : red_flags} {Σ : evar_map}.
 
-  Lemma pred1_app_beta_alt {s} x (ty : term s) body body' arg arg' args args' t :
+  Lemma pred1_beta_alt {s} x (ty : term s) body body' arg arg' args args' t :
     flags.(beta) = true ->
     Σ ⊢ body >>{flags} body' ->
     Σ ⊢ arg >>{flags} arg' ->
     All2 (pred1 flags Σ) args args' ->
     t = TApp (body' [x := arg']) args' ->
     Σ ⊢ TApp (TLam x ty body) (arg :: args) >>{flags} t.
-  Proof. intros Hf H1 H2 H3 ->. now apply pred1_app_beta. Qed.
+  Proof. intros Hf H1 H2 H3 ->. now apply pred1_beta. Qed.
 
   (** Renaming lemma for [pred1]. *)
   #[export] Instance pred1_rename {s s'} (ρ : ren s s') :
     Proper (pred1 flags Σ ==> pred1 flags Σ) (rename ρ).
   Proof.
   intros t t' H. induction H in s', ρ |- * ; simpl_subst.
-  - eapply pred1_app_beta_alt
+  - eapply pred1_beta_alt
       with (body' := rename (rup x ρ) body')
            (arg' := rename ρ arg')
            (args' := map (rename ρ) args') ;
@@ -228,6 +259,10 @@ Section Substitutivity.
       rewrite All2_map. revert H3. apply All2_consequence. firstorder.
     + now simpl_subst.
   - econstructor ; eassumption.
+  - now apply pred1_empty_app.
+  - rewrite map_app. apply pred1_nested_app ; auto.
+    + rewrite All2_map. revert H1. apply All2_consequence. firstorder.
+    + rewrite All2_map. revert H3. apply All2_consequence. firstorder.
   - reflexivity.
   - reflexivity.
   - now apply pred1_lam.
@@ -255,7 +290,7 @@ Section Substitutivity.
     Proper (spred1 flags Σ ==> pred1 flags Σ ==> pred1 flags Σ) (@substitute s s').
   Proof.
   intros σ σ' Hσ t t' Ht. induction Ht in s', σ, σ', Hσ |- * ; simpl_subst.
-  - apply pred1_app_beta_alt
+  - apply pred1_beta_alt
       with (body' := substitute (sup x σ') body')
            (arg' := substitute σ' arg')
            (args' := map (substitute σ') args').
@@ -266,6 +301,10 @@ Section Substitutivity.
       rewrite All2_map. revert H1. apply All2_consequence. firstorder.
     + now simpl_subst.
   - econstructor ; eauto.
+  - apply pred1_empty_app. now apply IHHt.
+  - rewrite map_app. apply pred1_nested_app ; auto.
+    + rewrite All2_map. revert H0. apply All2_consequence ; firstorder.
+    + rewrite All2_map. revert H2. apply All2_consequence ; firstorder.
   - reflexivity.
   - apply Hσ.
   - apply pred1_lam ; auto. apply IHHt2. now apply pred1_sup.
@@ -364,7 +403,7 @@ Section JoinabilityLemmas.
   exists (TApp f args). split ; apply pred1_app ; assumption.
   Qed.
 
-  Lemma joinable_beta {s x} ty2 body1 body2 (arg1 arg2 : term s) args1 args2 :
+  Lemma joinable_beta_l {s x} ty2 body1 body2 (arg1 arg2 : term s) args1 args2 :
     flags.(beta) = true ->
     joinable flags Σ body1 body2 ->
     joinable flags Σ arg1 arg2 ->
@@ -377,7 +416,88 @@ Section JoinabilityLemmas.
   - apply pred1_app.
     + repeat f_equiv ; assumption.
     + assumption.
-  - eapply pred1_app_beta ; eauto.
+  - eapply pred1_beta ; eauto.
+  Qed.
+
+  Lemma joinable_empty_app_l {s} (t u : term s) :
+    joinable flags Σ t u ->
+    joinable flags Σ (TApp t []) u.
+  Proof.
+  intros (v & H1 & H2). exists v. split ; [|assumption]. now apply pred1_empty_app.
+  Qed.
+
+  Lemma joinable_empty_app_r {s} (t u : term s) :
+    joinable flags Σ t u ->
+    joinable flags Σ t (TApp u []).
+  Proof. intros H. symmetry. now apply joinable_empty_app_l. Qed.
+
+  (*Lemma joinable_merge_app_l {s} (f t : term s) args1 args2 :
+    joinable flags Σ (TApp (TApp f args1) args2) t ->
+    joinable flags Σ (TApp f (args1 ++ args2)) t.
+  Proof.
+  intros (v & H1 & H2). exists v. split ; [|assumption].
+  clear H2. depelim H1.
+  - rewrite app_nil_r. assumption.
+  - apply pred1_app ; auto. apply All2_app ; assumption.
+  - depelim H1.
+    + admit.
+    + cbn. now apply pred1_app.
+    + *)
+
+
+  (*Lemma joinable_nested_app {s} (f f' : term s) args args1 args2 :
+    joinable flags Σ f (TApp f' args1) ->
+    All2 (joinable flags Σ) args args2 ->
+    joinable flags Σ (TApp f args) (TApp f' (args1 ++ args2)).
+  Proof.
+  intros (t & H1 & H2) H. apply joinable_list in H. destruct H as (args0 & H3 & H4).
+  exists (TApp t args0). split.
+  - now apply pred1_app.
+  - apply pred1_
+  Admitted.*)
+
+
+(*
+
+((t xs) ys) zs  >>  txs' (ys' ++ zs')
+
+v                              v
+v                              v
+
+(t'' (xs'' ++ ys'')) zs''       >>  t0 (xs0 ++ ys0)
+
+*)
+
+  Lemma aux1 {s x} t t' (arg arg' : term s) args1 args1' args2 args2' :
+    joinable flags Σ t t' ->
+    joinable flags Σ arg arg' ->
+    All2 (joinable flags Σ) args1 args1' ->
+    All2 (joinable flags Σ) args2 args2' ->
+    joinable flags Σ (TApp (TApp (t[x := arg]) args1) args2) (TApp (t'[x := arg']) (args1' ++ args2')).
+  Proof.
+  intros (t0 & Ht & Ht') (arg0 & Harg & Harg') H1 H2.
+  apply joinable_list in H1, H2.
+  destruct H1 as (args1_0 & Hargs1 & Hargs1'). destruct H2 as (args2_0 & Hargs2 & Hargs2').
+  exists (TApp (t0[x := arg0]) (args1_0 ++ args2_0)). split.
+  - apply pred1_nested_app ; try assumption. apply pred1_substitute.
+    + now apply pred1_scons.
+    + assumption.
+  - apply pred1_app.
+    + apply pred1_substitute ; auto. now apply pred1_scons.
+    + now apply All2_app.
+  Qed.
+
+  Lemma aux2 {s} (t t' : term s) args1 args1' args2 args2' :
+    joinable flags Σ t t' ->
+    All2 (joinable flags Σ) args1 args1' ->
+    All2 (joinable flags Σ) args2 args2' ->
+    joinable flags Σ (TApp (TApp t args1) args2) (TApp t' (args1' ++ args2')).
+  Proof.
+  intros (t0 & Ht & Ht') H1 H2. apply joinable_list in H1, H2.
+  destruct H1 as (args1_0 & Hargs1 & Hargs1'). destruct H2 as (args2_0 & Hargs2 & Hargs2').
+  exists (TApp t0 (args1_0 ++ args2_0)). split.
+  - apply pred1_nested_app ; auto.
+  - apply pred1_app ; auto. now apply All2_app.
   Qed.
 
 End JoinabilityLemmas.
@@ -409,26 +529,48 @@ Section DiamondPred1.
     + now apply IHpred1_2.
     + reflexivity.
     + revert H1 H3. apply All2_weird_consequence. firstorder.
-  - depelim H3. depelim H2. eapply joinable_beta.
+  - depelim H3. depelim H2. eapply joinable_beta_l.
     + assumption.
     + now apply IHpred1_1.
     + now apply IHpred1_2.
     + revert H1 H4. apply All2_weird_consequence. firstorder.
   - rewrite H0 in H2. depelim H2. reflexivity.
   - exists (wk def). split ; [reflexivity |]. econstructor ; eassumption.
+  - firstorder.
+  - depelim H0. rewrite app_nil_r. apply IHpred1. now apply pred1_app.
+  - depelim H. apply joinable_empty_app_r. now apply IHpred1.
+  - rewrite app_nil_r. depelim H4.
+    + admit.
+    + depelim H5. rewrite app_nil_r. apply IHpred1 in H4. apply joinable_app ; auto.
+      revert H0 H2. apply All2_weird_consequence. firstorder.
+    + depelim H2. clear H3. apply joinable_empty_app_r. depelim H4.
+      * depelim H0. depelim H. specialize (IHpred1 (TLam x ty body')).
+        forward IHpred1. { now apply pred1_lam. }
+        destruct IHpred1 as (v & Hv1 & Hv2). admit.
+      * depelim H. apply joinable_empty_app_l. now apply IHpred1.
+      * specialize (IHpred1 (TApp f'1 args1'0)). forward IHpred1. { now apply pred1_app. }
+        assert (H5 : All2 (joinable flags Σ) args1' args2').
+        { revert H0 H3. apply All2_weird_consequence. firstorder. }
+        admit.
+      * apply IHpred1 in H4. apply joinable_app ; auto.
+        (* ok. *) admit.
+  - admit.
   - apply joinable_lam ; auto.
   - apply joinable_prod ; auto.
   - depelim H1. depelim H. depelim H1.
     specialize (IHpred1 (TLam x ty' body')). feed IHpred1. { now apply pred1_lam. }
     destruct IHpred1 as (z & Hz1 & Hz2). depelim Hz1. depelim Hz2.
-    symmetry. eapply joinable_beta.
+    symmetry. eapply joinable_beta_l.
     + eassumption.
     + eexists ; eauto.
     + symmetry. auto.
     + revert H4 H2. apply All2_weird_consequence. firstorder.
+  - depelim H. apply joinable_empty_app_l. now apply IHpred1.
+  - specialize (IHpred1 (TApp f'0 args1')). forward IHpred1. { now apply pred1_app. }
+    admit.
   - apply joinable_app ; auto. revert H0 H3. apply All2_weird_consequence. firstorder.
   - exists (wk def). split ; [|reflexivity]. econstructor ; eassumption.
-  Qed.
+  Admitted.
 
   Lemma pred1_diamond {s} : diamond (@pred1 flags Σ s) (@pred1 flags Σ s).
   Proof. intros t1 t2 u H1 H2. eapply pred1_diamond_aux ; eauto. Qed.
@@ -493,6 +635,3 @@ Section Confluence.
   Qed.
 
 End Confluence.
-
-
-

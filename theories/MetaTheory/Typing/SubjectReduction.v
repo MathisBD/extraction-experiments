@@ -216,6 +216,20 @@ intros Ha Ha' Hb Hb'. split.
   + apply Hb'. now constructor.
 Qed.
 
+Lemma typing_nested_app {s} (Γ : context ∅ s) T0 T1 f args args' :
+  Σ ;; Γ ⊢ TApp f args : T0 ->
+  spine_typing Σ Γ T0 args' T1 ->
+  Σ ;; Γ ⊢ TApp f (args ++ args') : T1.
+Proof.
+intros H Hargs'. pose proof (HT0 := H). apply typing_validity in HT0 ; try assumption.
+apply typing_app_inv in H. destruct H as (f_ty & T0' & Hf & Hargs & Hconv).
+pose proof (HT1 := Hargs'). apply typing_spine_validity in HT1 ; try assumption.
+apply All_spine_conv_func_type with (f_ty' := T0') in Hargs' ; try easy.
+clear T0 HT0 Hconv. destruct Hargs' as (T1' & Hargs' & Hconv).
+apply typing_conv_type with T1' ; try easy. clear T1 HT1 Hconv.
+apply typing_app with f_ty ; auto. now apply All_spine_app with T0'.
+Qed.
+
 Lemma sr_prop_app {s} (Γ : context ∅ s) f f_ty args T :
   Σ ;; Γ ⊢ f : f_ty -> sr_prop Γ f f_ty ->
   All_spine Σ (fun t T => Σ ;; Γ ⊢ t : T /\ sr_prop Γ t T) f_ty args T ->
@@ -227,6 +241,8 @@ assert (Hargs' : spine_typing Σ Γ f_ty args T).
 split.
 - intros t' Hred. depelim Hred.
   + eapply typing_beta ; eauto. apply typing_app with f_ty ; eauto.
+  + depelim Hargs. assumption.
+  + apply typing_nested_app with f_ty ; auto.
   + apply typing_app with f_ty ; [now apply Hf' |] ; auto.
   + assert (HT : Σ ;; Γ ⊢ T : TType).
     { eapply typing_spine_validity with f_ty args ; eauto using typing_validity. }

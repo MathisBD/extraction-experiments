@@ -29,10 +29,6 @@ Equations map2 {A B C} : (A -> B -> C) -> list A -> list B -> list C :=
 map2 f (x :: xs) (y :: ys) := f x y :: map2 f xs ys ;
 map2 _ _ _ := [].
 
-(** Zip two lists. *)
-Definition zip {A B} (xs : list A) (ys : list B) : list (A * B) :=
-  map2 pair xs ys.
-
 (** [filter_list bs xs] filters the list [xs] by keeping only the elements
     for which the corresponding boolean in [bs] is [true].
     We assumes [bs] and [xs] have the same length. *)
@@ -60,6 +56,12 @@ Context {Hprint : printE -< E}.
 Context {Hfail : failE -< E}.
 Context {Hrec : recE E -< E}.
 Context {Hevar : evarE -< E}.
+
+Context {h : handler E}.
+Context {Hprint' : subhandler handle_printE h}.
+Context {Hfail' : subhandler handle_failE h}.
+Context {Hrec' : subhandler (handle_recE h) h}.
+Context {Hevar' : subhandler handle_evarE h}.
 
 (** [whd_evars evm t] will check if [t] is a defined evar, and if yes replace
     it with its body. *)
@@ -180,6 +182,10 @@ Notation "t1 '<|>' t2" := (or_backtrack t1 t2) (at level 30, right associativity
 Definition stack (s : scope) : Type :=
   term s * list (term s).
 
+(** Turn a stack into a term. *)
+Definition zip {s} (t : stack s) : term s :=
+  TApp (fst t) (snd t).
+
 (** Normalize a stack. *)
 MetaFixpoint norm_stack {s} (t : stack s) : meta E (stack s) :=
   match t with
@@ -200,6 +206,18 @@ Definition is_var {s} (t : term s) : meta E bool :=
   | _ => ret false
   end.
 
+Definition well_typed Σ {s} (Γ : context ∅ s) (t : term s) : Prop :=
+  exists T, Σ ;; Γ ⊢ t : T.
+
+Lemma well_typed_zip_nil Σ {s} Γ (t : term s) :
+  well_typed Σ Γ t ->
+  well_typed Σ Γ (zip (t, [])).
+Proof.
+intros [T Ht]. exists T. unfold zip. cbn. apply typing_app with T.
+- assumption.
+- constructor.
+Qed.
+
 (** We do open recursion: this section defines a function [unify_step] which does
     a single unification step. We tie the loop after this section by taking
     the fixpoint of [unify_step]. *)
@@ -207,9 +225,33 @@ Section UnifyStep.
   Context (unify_stack : forall {s}, context ∅ s -> stack s -> stack s -> meta E bool).
   Arguments unify_stack {s}.
 
+  Hypothesis wp_unify_stack :
+    forall Σ {s} Γ (t u : stack s),
+      typing_evar_map Σ ->
+      well_typed Σ Γ (zip t) ->
+      well_typed Σ Γ (zip u) ->
+      wp h _ (unify_stack Γ t u) (fun b Σ' =>
+        if b then Σ ⊑ Σ' /\ typing_evar_map Σ' /\ Σ' ⊢ zip t ≡ zip u
+        else Σ' = Σ) Σ.
+
   (** Simple wrapper around [unify_stack]. *)
   Definition unify {s} (Γ : context ∅ s) (t u : term s) : meta E bool :=
     unify_stack Γ (t, []) (u, []).
+
+  Lemma wp_unify Σ {s} Γ (t u : term s) :
+    typing_evar_map Σ ->
+    well_typed Σ Γ t ->
+    well_typed Σ Γ u ->
+    wp h _ (unify Γ t u) (fun b Σ' =>
+      if b then Σ ⊑ Σ' /\ typing_evar_map Σ' /\ Σ' ⊢ t ≡ u
+      else Σ' = Σ) Σ.
+  Proof.
+  intros HΣ Ht Hu. pose proof (H := wp_unify_stack Σ Γ (t, []) (u, []) HΣ).
+  forward H. { now apply well_typed_zip_nil. }
+  forward H. { now apply well_typed_zip_nil. }
+  unfold unify. revert H. apply wp_consequence.
+  intros [] Σ' ; [|auto]. intros (H1 & H2 & H3) ; split3 ; [assumption.. |].
+  unfold zip in H3. cbn in H3. Search conv TApp.
 
   (** Unify a list of terms. *)
   Equations unify_list {s} : context ∅ s -> list (term s) -> list (term s) -> meta E bool :=

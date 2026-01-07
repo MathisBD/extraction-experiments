@@ -147,4 +147,3 @@ Section Substitutivity.
   Qed.
 
 End Substitutivity.
-

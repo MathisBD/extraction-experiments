@@ -57,6 +57,8 @@ Section Substitutivity.
   intros t t' H. induction H in s', ρ |- * ; simpl_subst.
   - cbn. apply red1_beta_alt ; auto. f_equal. now simpl_subst.
   - eapply red1_evar_expand ; auto. eassumption.
+  - apply red1_empty_app.
+  - rewrite map_app. apply red1_nested_app.
   - now apply red1_lam_l.
   - now apply red1_lam_r.
   - now apply red1_prod_l.
@@ -109,6 +111,8 @@ Section Substitutivity.
   intros t t' H. induction H in s', σ |- * ; simpl_subst.
   - cbn. apply red1_beta_alt ; [assumption|]. f_equal. now simpl_subst.
   - eapply red1_evar_expand ; [assumption|]. eassumption.
+  - apply red1_empty_app.
+  - rewrite map_app. apply red1_nested_app.
   - now apply red1_lam_l.
   - now apply red1_lam_r.
   - now apply red1_prod_l.

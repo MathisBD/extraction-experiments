@@ -32,6 +32,14 @@ Inductive red1 (flags : red_flags) (Σ : evar_map) {s} : term s -> term s -> Pro
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
     Σ ⊢ TEvar ev ~>{flags} wk def
 
+(** Remove applications with no arguments. *)
+| red1_empty_app f :
+    Σ ⊢ TApp f [] ~>{flags} f
+
+(** Merge nested applications. *)
+| red1_nested_app f args args' :
+    Σ ⊢ TApp (TApp f args) args' ~>{flags} TApp f (args ++ args')
+
 (** Congrence rules for [TLam]. *)
 | red1_lam_l x ty ty' body :
     Σ ⊢ ty ~>{flags} ty' -> Σ ⊢ TLam x ty body ~>{flags} TLam x ty' body
@@ -73,6 +81,10 @@ Lemma red1_ind (flags : red_flags) (Σ : evar_map) (P : forall s, term s -> term
     flags.(evars) = true ->
     Σ ev = Some (mk_evar_entry ty (Some def)) ->
     P s (TEvar ev) (wk def)) ->
+  (forall s f,
+    P s (TApp f []) f) ->
+  (forall s f args args',
+    P s (TApp (TApp f args) args') (TApp f (args ++ args'))) ->
   (forall s x ty ty' body,
     Σ ⊢ ty ~>{flags} ty' ->
     P s ty ty' ->
@@ -98,10 +110,12 @@ Lemma red1_ind (flags : red_flags) (Σ : evar_map) (P : forall s, term s -> term
     P s (TApp f args) (TApp f args')) ->
   forall s t t', Σ ⊢ t ~>{flags} t' -> P s t t'.
 Proof.
-intros Hbeta Hevar Hlam_l Hlam_r Hprod_l Hprod_r Happ_l Happ_r. fix IH 4.
+intros Hbeta Hevar Hempty Hnested Hlam_l Hlam_r Hprod_l Hprod_r Happ_l Happ_r. fix IH 4.
 intros s t t' Hred. destruct Hred.
 - apply Hbeta ; auto.
 - eapply Hevar ; eauto.
+- apply Hempty.
+- apply Hnested.
 - apply Hlam_l ; auto.
 - apply Hlam_r ; auto.
 - apply Hprod_l ; auto.
