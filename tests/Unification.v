@@ -215,22 +215,13 @@ intros [T Ht]. exists T. unfold zip. cbn. apply typing_app with T.
 - constructor.
 Qed.
 
-Lemma red_extend_evm {flags Σ Σ' s}
-
-Lemma well_typed_extend_evm {Σ Σ' s} (Γ : context ∅ s) t :
-  well_typed Σ Γ t ->
-  Σ ⊑ Σ' ->
-  well_typed Σ' Γ t.
+Lemma well_typed_extend_evm {Σ1 Σ2 s} {Γ : context ∅ s} {t} :
+  Σ1 ⊑ Σ2 ->
+  well_typed Σ1 Γ t ->
+  well_typed Σ2 Γ t.
 Proof.
-intros (T & Ht) HΣ. exists T. induction Ht.
-- constructor. revert H. apply All_context_consequence. firstorder.
-- constructor ; auto. revert H. apply All_context_consequence. firstorder.
-- constructor ; auto.
-- constructor ; auto.
-- econstructor ; eauto. revert H. admit.
-- constructor.
-  + revert H. apply All_context_consequence. firstorder.
-  + apply HΣ in H0.
+intros HΣ (T & Ht). exists T. now apply (typing_extend_evm HΣ).
+Qed.
 
 (** We do open recursion: this section defines a function [unify_step] which does
     a single unification step. We tie the loop after this section by taking
@@ -274,6 +265,10 @@ Section UnifyStep.
   unify_list Γ (t :: ts) (u :: us) := unify Γ t u and% unify_list Γ ts us ;
   unify_list _ _ _ := fail "unify_list: lengths don't match".
 
+  (* we need [and%] to reset the evar-map if the first arg succeeds and the
+     second one fails. *)
+  Lemma wp_andM :
+
   Lemma wp_unify_list Σ {s} (Γ : context ∅ s) ts us :
     typing_evar_map Σ ->
     Forall (well_typed Σ Γ) ts ->
@@ -290,8 +285,15 @@ Section UnifyStep.
   - unfold andM, ifM. rewrite wp_Bind. depelim Hts. depelim Hus.
     eapply wp_consequence ; [| eapply wp_unify] ; auto.
     intros [] Σ'.
-    + intros (HΣincl & HΣ' & Hconv). eapply wp_consequence ; [| eapply H] ; auto.
-
+    + intros (Hincl & HΣ' & Hconv). eapply wp_consequence ; [| eapply H] ; auto.
+      * intros [] Σ'' ; [|auto]. intros (Hincl' & HΣ'' & Hconv'). split3.
+        --now rewrite Hincl, Hincl'.
+        --assumption.
+        --constructor ; [now apply (conv_extend_evm Hincl') | assumption].
+        --intros ->. auto.
+      * revert Hts. admit.
+      * revert Hus. admit.
+    + intros ->. rewrite wp_ret. reflexivity.
 
   (** Structurally unify the heads of two terms. *)
   Equations unify_same : forall {s}, context ∅ s -> term s -> term s -> meta E bool :=
