@@ -1,4 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Extraction.Basic.
+From Metaprog Require Import Prelude.
+From Metaprog Require Export Data.Term Extraction.Basic.
 
 (** This module specifies how to extract terms and related types.
     It makes heavy use of OCaml constants and functions defined

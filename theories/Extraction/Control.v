@@ -1,5 +1,5 @@
-From Metaprog Require Import Prelude Data.Term Extraction.Basic Extraction.Data.
-From Metaprog.Control Require Import Meta Command Effects.All.
+From Metaprog Require Import Prelude MetaTheory.EvarMap.
+From Metaprog Require Export Extraction.Data Control.
 
 (** This module specifies how to extract the meta-programming monad
     and effects to OCaml. *)

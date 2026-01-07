@@ -1,7 +1,6 @@
 From Stdlib Require Strings.PrimString.
-From Stdlib Require Import Relations Morphisms Setoid Program Bool Nat List Lia.
 From Equations Require Import Equations.
-From Metaprog Require Import Prelude Data.Context Control.Effects.All.
+From Metaprog Require Import Prelude Data Control Logic MetaTheory.
 
 Import ListNotations.
 Import PrimString.PStringNotations.
@@ -121,6 +120,9 @@ MetaFixpoint eq_term_evars {s} (t u : term s) : meta E bool :=
   | TEvar ev, TEvar ev' => ret (Nat.eqb ev ev')
   | _, _ => ret false
   end.
+
+Check fix1.
+
 
 (***********************************************************************)
 (** * Retyping. *)

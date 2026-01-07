@@ -1,4 +1,4 @@
-From Metaprog Require Import Prelude PluginLoader.
+From Metaprog Require Import Prelude.
 From Metaprog Require Export Control.Meta.
 
 (** Due to technical details related to the positivity condition, recursive calls

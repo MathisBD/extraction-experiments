@@ -5,6 +5,9 @@ From Metaprog Require Export Axioms.
 Export PrimString.PStringNotations.
 Export List.ListNotations.
 
+(** Load the OCaml plugin. *)
+Declare ML Module "extraction-experiments.plugin".
+
 (** We allow [Equations] to use UIP instances, e.g. when deriving
     instances of [NoConfusion] or [NoConfusionHom]. *)
 #[export] Set Equations With UIP.
