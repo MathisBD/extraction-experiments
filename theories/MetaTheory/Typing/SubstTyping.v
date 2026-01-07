@@ -18,6 +18,17 @@ Definition rtyping (Σ : evar_map) {s s'} (Γ : context ∅ s) (ρ : ren s s') (
 Notation "Σ ;; Γ ⊢ᵣ ρ : Δ" := (rtyping Σ Γ ρ Δ)
   (at level 50, Γ at next level, ρ at next level, Δ at next level).
 
+Lemma rtyping_extend_evm {Σ1 Σ2 s s' Γ Δ} {ρ : ren s s'} :
+  Σ1 ⊑ Σ2 ->
+  rtyping Σ1 Γ ρ Δ ->
+  rtyping Σ2 Γ ρ Δ.
+Proof.
+intros HΣ (HΓ & HΔ & Hρ). split3.
+- now apply (ctyping_extend_evm HΣ).
+- now apply (ctyping_extend_evm HΣ).
+- assumption.
+Qed.
+
 (***********************************************************************)
 (** * Typing substitutions. *)
 (***********************************************************************)
@@ -31,6 +42,17 @@ Definition styping (Σ : evar_map) {s s'} (Γ : context ∅ s) (σ : subst s s')
 
 Notation "Σ ;; Γ ⊢ₛ σ : Δ" := (styping Σ Γ σ Δ)
   (at level 50, Γ at next level, σ at next level, Δ at next level).
+
+Lemma styping_extend_evm {Σ1 Σ2 s s' Γ Δ} {σ : subst s s'} :
+  Σ1 ⊑ Σ2 ->
+  styping Σ1 Γ σ Δ ->
+  styping Σ2 Γ σ Δ.
+Proof.
+intros HΣ (HΓ & HΔ & Hσ). split3.
+- now apply (ctyping_extend_evm HΣ).
+- now apply (ctyping_extend_evm HΣ).
+- intros i. now apply (typing_extend_evm HΣ).
+Qed.
 
 (***********************************************************************)
 (** * Compatibility of typing with renaming. *)
@@ -111,7 +133,7 @@ intros Ht Hρ. induction Ht in s', ρ, Δ, Hρ |- * ; simpl_subst.
     * rewrite H0. simpl_subst. reflexivity.
     * now apply H1.
     * simpl_subst. simpl_subst in IHAll_spine. apply IHAll_spine ; auto.
-- apply typing_evar ; auto. apply Hρ.
+- eapply typing_evar ; eauto. apply Hρ.
 - apply typing_conv_type with (A := rename ρ A) ; auto. now rewrite H.
 Qed.
 

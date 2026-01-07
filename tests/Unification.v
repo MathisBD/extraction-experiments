@@ -123,9 +123,6 @@ MetaFixpoint eq_term_evars {s} (t u : term s) : meta E bool :=
   | _, _ => ret false
   end.
 
-Check fix1.
-
-
 (***********************************************************************)
 (** * Retyping. *)
 (***********************************************************************)
@@ -218,6 +215,23 @@ intros [T Ht]. exists T. unfold zip. cbn. apply typing_app with T.
 - constructor.
 Qed.
 
+Lemma red_extend_evm {flags Σ Σ' s}
+
+Lemma well_typed_extend_evm {Σ Σ' s} (Γ : context ∅ s) t :
+  well_typed Σ Γ t ->
+  Σ ⊑ Σ' ->
+  well_typed Σ' Γ t.
+Proof.
+intros (T & Ht) HΣ. exists T. induction Ht.
+- constructor. revert H. apply All_context_consequence. firstorder.
+- constructor ; auto. revert H. apply All_context_consequence. firstorder.
+- constructor ; auto.
+- constructor ; auto.
+- econstructor ; eauto. revert H. admit.
+- constructor.
+  + revert H. apply All_context_consequence. firstorder.
+  + apply HΣ in H0.
+
 (** We do open recursion: this section defines a function [unify_step] which does
     a single unification step. We tie the loop after this section by taking
     the fixpoint of [unify_step]. *)
@@ -251,13 +265,33 @@ Section UnifyStep.
   forward H. { now apply well_typed_zip_nil. }
   unfold unify. revert H. apply wp_consequence.
   intros [] Σ' ; [|auto]. intros (H1 & H2 & H3) ; split3 ; [assumption.. |].
-  unfold zip in H3. cbn in H3. Search conv TApp.
+  unfold zip in H3. cbn in H3. rewrite !red1_empty_app in H3. exact H3.
+  Qed.
 
   (** Unify a list of terms. *)
   Equations unify_list {s} : context ∅ s -> list (term s) -> list (term s) -> meta E bool :=
   unify_list Γ [] [] := ret true ;
   unify_list Γ (t :: ts) (u :: us) := unify Γ t u and% unify_list Γ ts us ;
   unify_list _ _ _ := fail "unify_list: lengths don't match".
+
+  Lemma wp_unify_list Σ {s} (Γ : context ∅ s) ts us :
+    typing_evar_map Σ ->
+    Forall (well_typed Σ Γ) ts ->
+    Forall (well_typed Σ Γ) us ->
+    List.length ts = List.length us ->
+    wp h _ (unify_list Γ ts us) (fun b Σ' =>
+      if b then Σ ⊑ Σ' /\ typing_evar_map Σ' /\ All2 (conv red_flags_all Σ') ts us
+      else Σ' = Σ) Σ.
+  Proof.
+  intros HΣ Hts Hus Hlen. funelim (unify_list Γ ts us).
+  - rewrite wp_ret. split3 ; easy.
+  - depelim Hlen.
+  - depelim Hlen.
+  - unfold andM, ifM. rewrite wp_Bind. depelim Hts. depelim Hus.
+    eapply wp_consequence ; [| eapply wp_unify] ; auto.
+    intros [] Σ'.
+    + intros (HΣincl & HΣ' & Hconv). eapply wp_consequence ; [| eapply H] ; auto.
+
 
   (** Structurally unify the heads of two terms. *)
   Equations unify_same : forall {s}, context ∅ s -> term s -> term s -> meta E bool :=

@@ -101,6 +101,15 @@ intros H H'. depind H ; cbn.
 - econstructor ; eauto.
 Qed.
 
+Lemma All_spine_extend_evm {Σ1 Σ2 s P} {T T' : term s} {args} :
+  Σ1 ⊑ Σ2 ->
+  All_spine Σ1 P T args T' ->
+  All_spine Σ2 P T args T'.
+Proof.
+intros HΣ H. depind H ; econstructor ; eauto.
+now apply (conv_extend_evm HΣ).
+Qed.
+
 (***********************************************************************)
 (** * Typing relation on terms. *)
 (***********************************************************************)
@@ -151,10 +160,11 @@ Inductive typing (Σ : evar_map) {s} (Γ : context ∅ s) : term s -> term s -> 
     spine_typing Σ Γ f_ty args T ->
     Σ ;; Γ ⊢ TApp f args : T
 
-| typing_evar ev entry :
+| typing_evar ev entry ty :
     ctyping Σ Γ ->
     Σ ev = Some entry ->
-    Σ ;; Γ ⊢ TEvar ev : wk entry.(evar_type)
+    wk entry.(evar_type) = ty ->
+    Σ ;; Γ ⊢ TEvar ev : ty
 
 | typing_conv_type t A B :
     Σ ;; Γ ⊢ t : A ->
@@ -220,11 +230,15 @@ fix IH 5. intros s Γ t T H. depelim H.
   fix IHspine 4. intros f_ty args T H0. destruct H0.
   + constructor.
   + econstructor ; eauto.
-- apply Hevar ; auto. revert s Γ H. fix IHctx 3. intros s Γ H. destruct H ; constructor.
+- subst. apply Hevar ; auto. revert s Γ H. fix IHctx 3. intros s Γ H. destruct H ; constructor.
   + apply IHctx. assumption.
   + split ; auto.
 - eapply Hconv_type ; eauto.
 Qed.
+
+(***********************************************************************)
+(** * Basic properties of [typing]. *)
+(***********************************************************************)
 
 (** In any typing derivation [Σ ;; Γ ⊢ t : T] the context [Γ] is well-typed. *)
 Lemma typing_context_validity {s} Σ Γ (t T : term s) :
@@ -233,6 +247,33 @@ Lemma typing_context_validity {s} Σ Γ (t T : term s) :
 Proof.
 intros H. induction H ; auto.
 all: revert H ; now apply All_context_consequence.
+Qed.
+
+Lemma typing_extend_evm {Σ1 Σ2 s Γ} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@typing Σ1 s Γ) (@typing Σ2 s Γ).
+Proof.
+intros HΣ t T H. induction H.
+- constructor. revert H. apply All_context_consequence. firstorder.
+- constructor ; auto. revert H. apply All_context_consequence. firstorder.
+- now constructor.
+- now constructor.
+- apply typing_app with f_ty ; auto. apply (All_spine_extend_evm HΣ).
+  revert H0. apply All_spine_consequence. firstorder.
+- pose proof (Hev := evm_incl_prop _ _ HΣ ev). rewrite H0 in Hev. depelim Hev.
+  + cbn. eapply typing_evar ; eauto.
+    revert H. apply All_context_consequence. firstorder.
+  + cbn. eapply typing_evar ; eauto.
+    revert H. apply All_context_consequence. firstorder.
+- apply typing_conv_type with A ; auto. now apply (conv_extend_evm HΣ).
+Qed.
+
+Lemma ctyping_extend_evm {Σ1 Σ2 s} {Γ : context ∅ s} :
+  Σ1 ⊑ Σ2 ->
+  ctyping Σ1 Γ ->
+  ctyping Σ2 Γ.
+Proof.
+intros HΣ H. depind H ; constructor ; auto. now apply (typing_extend_evm HΣ).
 Qed.
 
 (***********************************************************************)

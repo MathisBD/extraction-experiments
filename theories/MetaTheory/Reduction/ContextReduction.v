@@ -92,6 +92,24 @@ intros Hf Γ Γ' HΓ. induction HΓ ; constructor.
 - assumption.
 Qed.
 
+Lemma cred1_extend_evm {flags Σ1 Σ2 s} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@cred1 flags Σ1 s) (@cred1 flags Σ2 s).
+Proof.
+intros HΣ Γ Γ' HΓ. induction HΓ.
+- constructor. now apply (red1_extend_evm HΣ).
+- constructor. assumption.
+Qed.
+
+Lemma cred_extend_evm {flags Σ1 Σ2 s} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@cred flags Σ1 s) (@cred flags Σ2 s).
+Proof.
+intros HΣ Γ Γ' HΓ. induction HΓ ; constructor.
+- now apply (red_extend_evm HΣ).
+- assumption.
+Qed.
+
 (***********************************************************************)
 (** * Lemmas about context reduction. *)
 (***********************************************************************)

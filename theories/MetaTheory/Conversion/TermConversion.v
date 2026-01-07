@@ -83,6 +83,17 @@ intros Hf t u H. induction H.
 - etransitivity ; eauto.
 Qed.
 
+Lemma conv_extend_evm {flags Σ1 Σ2 s} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@conv flags Σ1 s) (@conv flags Σ2 s).
+Proof.
+intros HΣ t u H. induction H.
+- apply (red1_extend_evm HΣ) in H. now constructor.
+- reflexivity.
+- now symmetry.
+- etransitivity ; eauto.
+Qed.
+
 (***********************************************************************)
 (** * Church-Rosser lemma. *)
 (***********************************************************************)

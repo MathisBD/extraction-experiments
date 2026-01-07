@@ -43,6 +43,15 @@ intros Hf σ1 σ2 [Hσ]. constructor. intros i.
 eapply red_extend_flags ; eauto.
 Qed.
 
+Lemma sred_extend_evm {flags Σ1 Σ2 s s'} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@sred flags Σ1 s s') (@sred flags Σ2 s s').
+Proof.
+intros HΣ σ1 σ2 [Hσ]. constructor. intros i.
+now apply (red_extend_evm HΣ).
+Qed.
+
+
 (***********************************************************************)
 (** * Compatibility of reduction with renaming and substitution. *)
 (***********************************************************************)

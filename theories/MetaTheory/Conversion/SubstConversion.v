@@ -56,6 +56,14 @@ intros Hf σ1 σ2 Hσ. constructor. intros i. apply (conv_extend_flags Hf).
 apply Hσ.
 Qed.
 
+Lemma sconv_extend_evm {flags Σ1 Σ2 s s'} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@sconv flags Σ1 s s') (@sconv flags Σ2 s s').
+Proof.
+intros HΣ σ1 σ2 Hσ. constructor. intros i. apply (conv_extend_evm HΣ).
+apply Hσ.
+Qed.
+
 (***********************************************************************)
 (** * Church-Rosser lemma. *)
 (***********************************************************************)

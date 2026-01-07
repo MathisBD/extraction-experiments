@@ -167,6 +167,7 @@ Lemma red_same flags Σ {s} (t u : term s) :
   t = u -> Σ ⊢ t ~~>{flags} u.
 Proof. intros ->. reflexivity. Qed.
 
+(** Extending the set of flags preserves reductions. *)
 Lemma red1_extend_flags {flags1 flags2 Σ s} :
   red_flags_incl flags1 flags2 ->
   subrelation (@red1 flags1 Σ s) (@red1 flags2 Σ s).
@@ -177,6 +178,7 @@ intros Hf t u Hred. induction Hred ; try now constructor.
 - constructor. revert H. apply OnOne2_consequence. firstorder.
 Qed.
 
+(** Extending the set of flags preserves reductions. *)
 Lemma red_extend_flags {flags1 flags2 Σ s} :
   red_flags_incl flags1 flags2 ->
   subrelation (@red flags1 Σ s) (@red flags2 Σ s).
@@ -186,6 +188,30 @@ intros Hf t u Hred. induction Hred.
 - transitivity t2.
   + apply IHHred.
   + apply (red1_extend_flags Hf) in H. now rewrite H.
+Qed.
+
+(** Extending the evar-map preserves reductions. *)
+Lemma red1_extend_evm {flags Σ Σ' s} :
+  Σ ⊑ Σ' ->
+  subrelation (@red1 flags Σ s) (@red1 flags Σ' s).
+Proof.
+intros HΣ t u H. induction H ; try now constructor.
+- apply red1_evar_expand with ty ; try assumption.
+  pose proof (Hev := evm_incl_prop Σ Σ' HΣ ev). rewrite H0 in Hev.
+  depelim Hev. assumption.
+- apply red1_app_r. revert H. apply OnOne2_consequence. firstorder.
+Qed.
+
+(** Extending the evar-map preserves reductions. *)
+Lemma red_extend_evm {flags Σ Σ' s} :
+  Σ ⊑ Σ' ->
+  subrelation (@red flags Σ s) (@red flags Σ' s).
+Proof.
+intros HΣ t u H. induction H.
+- reflexivity.
+- transitivity t2.
+  + apply IHred.
+  + apply (red1_extend_evm HΣ) in H0. now rewrite H0.
 Qed.
 
 (***********************************************************************)

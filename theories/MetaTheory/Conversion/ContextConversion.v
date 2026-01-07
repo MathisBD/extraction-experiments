@@ -77,6 +77,15 @@ intros Hf Γ Γ' HΓ. induction HΓ ; constructor.
 - assumption.
 Qed.
 
+Lemma cconv_extend_evm {flags Σ1 Σ2 s} :
+  Σ1 ⊑ Σ2 ->
+  subrelation (@cconv flags Σ1 s) (@cconv flags Σ2 s).
+Proof.
+intros HΣ Γ Γ' HΓ. induction HΓ ; constructor.
+- now apply (conv_extend_evm HΣ).
+- assumption.
+Qed.
+
 (***********************************************************************)
 (** * Lemmas about context conversion. *)
 (***********************************************************************)

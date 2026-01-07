@@ -266,7 +266,7 @@ intros Hev HΓ HΓ'. split.
   simpl_subst. eapply typing_rename.
   + apply HΣ in H0. depelim H0. eassumption.
   + split3 ; try easy. constructor.
-- intros Γ' Hred. constructor ; auto. now apply ctyping_red1 with Γ.
+- intros Γ' Hred. econstructor ; eauto. now apply ctyping_red1 with Γ.
 Qed.
 
 Lemma sr_prop_conv_type {s} Γ (t A B : term s) :
