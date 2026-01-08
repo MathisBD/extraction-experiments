@@ -6,6 +6,12 @@ Import ListNotations.
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.
 
+(** [apply_wp L] applies the lemma [L] with conclusion [wp h A m ?Φ g]
+    to a goal with a different postcondition [wp h A m ?Φ' g], using
+    the consequence rule to bridge the gap between [Φ] and [Φ']. *)
+Ltac apply_wp L :=
+  eapply wp_consequence ; [| eapply L] ; cycle 1.
+
 (***********************************************************************)
 (** * Utility functions and notations. *)
 (***********************************************************************)
@@ -162,13 +168,27 @@ MetaFixpoint retype {s} (Γ : context ∅ s) (t : term s) : meta E (term s) :=
 (** * Unification result. *)
 (***********************************************************************)
 
-(* TODO: seems fishy, we should probably reset the evar-map before [t2] somehow?
+(* TODO: we need to reset the evar-map before [t2] somehow?
    This needs backtracking. *)
-Definition or_backtrack (t1 t2 : meta E bool) : meta E bool :=
-  let% b1 := t1 in
-  if b1 then ret true else t2.
+Definition or_backtrack (t1 t2 : meta E bool) : meta E bool.
+Admitted.
 
 Notation "t1 '<|>' t2" := (or_backtrack t1 t2) (at level 30, right associativity).
+
+Definition and_backtrack (t1 t2 : meta E bool) : meta E bool.
+Admitted.
+
+Notation "t1 '<&>' t2" := (and_backtrack t1 t2) (at level 30, right associativity).
+
+Lemma wp_and_backtrack (t1 t2 : meta E bool) Φ Σ :
+  wp h _ (t1 <&> t2) Φ Σ <->
+  wp h _ t1 (fun b1 Σ' =>
+    if b1
+    then wp h _ t2 (fun b2 Σ'' => if b2 then Φ true Σ'' else Φ false Σ) Σ'
+    else Φ false Σ) Σ.
+Proof. Admitted.
+Hint Rewrite @wp_and_backtrack : wp.
+
 
 (** [stack] represents a term by separating the head from the list of arguments (aka spine).
     This is done to have O(1) access to the head β-redex.
@@ -254,20 +274,16 @@ Section UnifyStep.
   intros HΣ Ht Hu. pose proof (H := wp_unify_stack Σ Γ (t, []) (u, []) HΣ).
   forward H. { now apply well_typed_zip_nil. }
   forward H. { now apply well_typed_zip_nil. }
-  unfold unify. revert H. apply wp_consequence.
-  intros [] Σ' ; [|auto]. intros (H1 & H2 & H3) ; split3 ; [assumption.. |].
+  unfold unify. apply_wp H. intros [] Σ' ; [|auto].
+  intros (H1 & H2 & H3) ; split3 ; [assumption.. |].
   unfold zip in H3. cbn in H3. rewrite !red1_empty_app in H3. exact H3.
   Qed.
 
   (** Unify a list of terms. *)
   Equations unify_list {s} : context ∅ s -> list (term s) -> list (term s) -> meta E bool :=
   unify_list Γ [] [] := ret true ;
-  unify_list Γ (t :: ts) (u :: us) := unify Γ t u and% unify_list Γ ts us ;
+  unify_list Γ (t :: ts) (u :: us) := unify Γ t u <&> unify_list Γ ts us ;
   unify_list _ _ _ := fail "unify_list: lengths don't match".
-
-  (* we need [and%] to reset the evar-map if the first arg succeeds and the
-     second one fails. *)
-  Lemma wp_andM :
 
   Lemma wp_unify_list Σ {s} (Γ : context ∅ s) ts us :
     typing_evar_map Σ ->
@@ -279,21 +295,18 @@ Section UnifyStep.
       else Σ' = Σ) Σ.
   Proof.
   intros HΣ Hts Hus Hlen. funelim (unify_list Γ ts us).
-  - rewrite wp_ret. split3 ; easy.
+  - simpl_wp. split3 ; easy.
   - depelim Hlen.
   - depelim Hlen.
-  - unfold andM, ifM. rewrite wp_Bind. depelim Hts. depelim Hus.
-    eapply wp_consequence ; [| eapply wp_unify] ; auto.
-    intros [] Σ'.
-    + intros (Hincl & HΣ' & Hconv). eapply wp_consequence ; [| eapply H] ; auto.
-      * intros [] Σ'' ; [|auto]. intros (Hincl' & HΣ'' & Hconv'). split3.
-        --now rewrite Hincl, Hincl'.
-        --assumption.
-        --constructor ; [now apply (conv_extend_evm Hincl') | assumption].
-        --intros ->. auto.
-      * revert Hts. admit.
-      * revert Hus. admit.
-    + intros ->. rewrite wp_ret. reflexivity.
+  - simpl_wp. depelim Hts. depelim Hus. apply_wp wp_unify ; auto.
+    intros [] Σ' ; [| auto]. intros (Hincl & HΣ' & Hconv). apply_wp H ; auto.
+    + revert Hts. apply Forall_consequence. intros v. apply (well_typed_extend_evm Hincl).
+    + revert Hus. apply Forall_consequence. intros v. apply (well_typed_extend_evm Hincl).
+    + intros [] Σ'' ; [|auto]. intros (Hincl' & HΣ'' & Hconv'). split3.
+      * etransitivity ; eauto.
+      * assumption.
+      * constructor ; [now apply (conv_extend_evm Hincl') | assumption].
+  Qed.
 
   (** Structurally unify the heads of two terms. *)
   Equations unify_same : forall {s}, context ∅ s -> term s -> term s -> meta E bool :=
@@ -303,16 +316,51 @@ Section UnifyStep.
   unify_same Γ (TVar x) (TVar y) := ret $ index_eq x y ;
   (* Rule LAM-SAME. *)
   unify_same Γ (TLam x ty body) (TLam y ty' body') :=
-    unify Γ ty ty' and%
+    unify Γ ty ty' <&>
     unify (CCons Γ x ty) body (rename (replace_tag x) body') ;
   (* Rule PROD-SAME. *)
   unify_same Γ (TProd x a b) (TProd y a' b') :=
-    unify Γ a a' and%
+    unify Γ a a' <&>
     unify (CCons Γ x a) b (rename (replace_tag x) b') ;
   unify_same Γ _ _ := ret false.
 
+  Lemma well_typed_lam {s x} Σ (Γ : context ∅ s) ty body :
+    well_typed Σ Γ (TLam x ty body) ->
+    well_typed Σ Γ ty /\ well_typed Σ (CCons Γ x ty) body.
+Proof. Admitted.
+
+  Lemma well_typed_rename {s s'} Σ Γ Δ (ρ : ren s s') t :
+    well_typed Σ Γ t ->
+    rtyping Σ Γ ρ Δ ->
+    well_typed Σ Δ (rename ρ t).
+Proof. Admitted.
+
+  Lemma wp_unify_same Σ {s} (Γ : context ∅ s) t u :
+    typing_evar_map Σ ->
+    well_typed Σ Γ t ->
+    well_typed Σ Γ u ->
+    wp h _ (unify_same Γ t u) (fun b Σ' =>
+      if b then Σ ⊑ Σ' /\ typing_evar_map Σ' /\ Σ' ⊢ t ≡ u
+      else Σ' = Σ) Σ.
+  Proof.
+  intros HΣ Ht Hu. funelim (unify_same Γ t u) ; simpl_wp ; try reflexivity.
+  - split3 ; easy.
+  - destruct (index_eq_spec x y) ; subst ; easy.
+  - apply_wp wp_unify ; try easy.
+    + now apply well_typed_lam in Ht.
+    + now apply well_typed_lam in Hu.
+    + intros [] Σ' ; [| auto]. intros (Hincl & HΣ' & Hconv). apply_wp wp_unify.
+      * assumption.
+      * apply (well_typed_extend_evm Hincl). now apply well_typed_lam in Ht.
+      * apply (well_typed_extend_evm Hincl).
+        assert (y = x) as -> by (now destruct x ; destruct y).
+        assert (@replace_tag s x x = rid) as -> by now destruct x.
+        simpl_subst.
+        rewrite rename_rid. now apply well_typed_lam in Hu.
+
   (** Rule APP-FO. *)
-  Equations unify_app_fo : forall {s}, context ∅ s -> stack s -> stack s -> meta E bool :=
+  Equations unify_app_fo :
+   forall {s}, context ∅ s -> stack s -> stack s -> meta E bool :=
   unify_app_fo Γ (f, args) (f', args') :=
     if Nat.eqb (List.length args) (List.length args')
     then unify_list Γ (f :: args) (f' :: args')

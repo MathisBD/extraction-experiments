@@ -71,6 +71,12 @@ Notation "⟨ x , y1 , y2 , y3 ⟩" := (existT3 _ _ _ x y1 y2 y3).
 
 Derive Signature for Forall Exists.
 
+Lemma Forall_consequence {A} (P Q : A -> Prop) (xs : list A) :
+  (forall x, P x -> Q x) ->
+  Forall P xs ->
+  Forall Q xs.
+Proof. intros Himpl H. depind H ; constructor ; auto. Qed.
+
 (** [OnOne2 P xs ys] means that the lists [xs] and [ys] are equal except at
     exactly one position, and at these positions the elements are related by [P]. *)
 Inductive OnOne2 {A} (P : A -> A -> Prop) : list A -> list A -> Prop :=

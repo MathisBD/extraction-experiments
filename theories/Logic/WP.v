@@ -1,7 +1,11 @@
 From Metaprog Require Import Prelude.
 From Metaprog Require Export Control.Meta MetaTheory.EvarMap Logic.Lattice.
 
-(** This module defines the program logic. *)
+(** This module defines the program logic and proves some basic properties
+    which are independent of the set of effects.
+
+    We provide a tactic [simpl_wp] which simplifies specific uses of [wp],
+    e.g. [wp h _ (ret x) Φ g] is simplified to [Φ x g]. *)
 
 (** [gstate] is the ghost state we use when verifying meta-programs
     using the program logic. *)
@@ -333,3 +337,19 @@ Section Induction.
   Qed.
 
 End Induction.
+
+(**************************************************************************)
+(** * [simpl_wp] tactic. *)
+(**************************************************************************)
+
+#[export] Hint Rewrite @wp_Ret @wp_Bind @wp_Vis : wp.
+#[export] Hint Rewrite @wp_ret @wp_trigger : wp.
+
+(** The tactic [simpl_wp] rewrites with lemmas to simplify [wp]
+    but _only_ at the root of the term! *)
+Ltac simpl_wp :=
+  repeat rewrite_strat (hints wp).
+
+(** Same as [simpl_wp] but works on a hypothesis [H]. *)
+Tactic Notation "simpl_wp" "in" hyp(H) :=
+  repeat rewrite_strat (hints wp) in H.

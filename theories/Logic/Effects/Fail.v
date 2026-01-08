@@ -15,3 +15,4 @@ Next Obligation. intros A []. firstorder. Qed.
 Lemma wp_fail {E A} (h : handler E) `{subhandler _ _ handle_failE h} Φ g msg :
   wp h A (fail msg) Φ g <-> False.
 Proof. unfold fail, trigger. rewrite wp_Vis, handle_inj. cbn. reflexivity. Qed.
+#[export] Hint Rewrite @wp_fail : wp.

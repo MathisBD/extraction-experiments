@@ -17,3 +17,4 @@ Lemma wp_print {E} (h : handler E) `{subhandler _ _ handle_printE h} Φ g msg :
 Proof.
 unfold print, trigger. rewrite wp_Vis, handle_inj. cbn. reflexivity.
 Qed.
+#[export] Hint Rewrite @wp_print : wp.

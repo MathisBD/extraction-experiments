@@ -58,3 +58,5 @@ Section WPs.
   Qed.
 
 End WPs.
+
+#[export] Hint Rewrite @wp_fresh_evar @wp_lookup_evar @wp_define_evar : wp.
