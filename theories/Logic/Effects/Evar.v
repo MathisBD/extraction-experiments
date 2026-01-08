@@ -3,6 +3,51 @@ From Metaprog Require Export Control.Effects.Evar Logic.WP.
 
 (** This module defines the specification of the [evarE] effect. *)
 
+(*Axiom reset_tok : Type.
+
+Variant evarE' : Type -> Type :=
+| SaveEvarMap : evarE' reset_tok
+| ResetEvarMap : reset_tok -> evarE' unit.
+
+Program Definition handle_evarE' {E} `{evarE' -< E} (h : handler E) : handler evarE' := {|
+  handler_fun _ e :=
+    match e with
+    | SaveEvarMap => fun Φ Σ =>
+        forall tok,
+          (forall Φ' Σ', wp h _ (trigger (ResetEvarMap tok)) Φ' Σ' <-> Φ' tt Σ) ->
+          Φ tok Σ
+    | ResetEvarMap tok => fun Φ Σ =>
+        forall Σ', Φ tt Σ'
+    end
+|}.
+Next Obligation.
+intros E HE h A [| tok] Φ Φ' Σ HΦ.
+- intros H tok Htok. apply HΦ. apply H. exact Htok.
+- firstorder.
+Qed.
+
+Axiom fun_tok : Type -> Type -> Type.
+
+Variant recE' (E : Type -> Type) : Type -> Type :=
+| Fix {A B} (F : fun_tok A B -> A -> meta E B) (a : A) : recE' E B
+| Call {A B} (tok : fun_tok A B) (a : A) : recE' E B.
+
+Arguments Fix {E A B}.
+Arguments Call {E A B}.
+
+Program Definition handle_recE' {E} `{recE' E -< E} (h : handler E) : handler (recE' E) := {|
+  handler_fun _ e :=
+    match e with
+    | Fix F a => fun Φ Σ =>
+      forall tok,
+        (forall Φ' Σ' a',
+          wp h _ (trigger (Call tok a')) Φ' Σ' <->
+          wp h _ (F tok a') Φ' Σ') ->
+        wp h _ (F tok a) Φ Σ
+    | Call tok a => fun Φ Σ => True
+    end
+|}.*)
+
 Definition set_evar (Σ : evar_map) (ev : evar_id) (entry : evar_entry) : evar_map :=
   fun ev' => if Nat.eqb ev ev' then Some entry else Σ ev'.
 
