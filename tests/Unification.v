@@ -6,12 +6,6 @@ Import ListNotations.
 Import PrimString.PStringNotations.
 Open Scope pstring_scope.
 
-(** [apply_wp L] applies the lemma [L] with conclusion [wp h A m ?Φ g]
-    to a goal with a different postcondition [wp h A m ?Φ' g], using
-    the consequence rule to bridge the gap between [Φ] and [Φ']. *)
-Ltac apply_wp L :=
-  eapply wp_consequence ; [| eapply L] ; cycle 1.
-
 (***********************************************************************)
 (** * Utility functions and notations. *)
 (***********************************************************************)
@@ -223,8 +217,6 @@ Definition is_var {s} (t : term s) : meta E bool :=
   | _ => ret false
   end.
 
-Definition well_typed Σ {s} (Γ : context ∅ s) (t : term s) : Prop :=
-  exists T, Σ ;; Γ ⊢ t : T.
 
 Lemma well_typed_zip_nil Σ {s} Γ (t : term s) :
   well_typed Σ Γ t ->
@@ -235,13 +227,6 @@ intros [T Ht]. exists T. unfold zip. cbn. apply typing_app with T.
 - constructor.
 Qed.
 
-Lemma well_typed_extend_evm {Σ1 Σ2 s} {Γ : context ∅ s} {t} :
-  Σ1 ⊑ Σ2 ->
-  well_typed Σ1 Γ t ->
-  well_typed Σ2 Γ t.
-Proof.
-intros HΣ (T & Ht). exists T. now apply (typing_extend_evm HΣ).
-Qed.
 
 (** We do open recursion: this section defines a function [unify_step] which does
     a single unification step. We tie the loop after this section by taking
@@ -324,16 +309,24 @@ Section UnifyStep.
     unify (CCons Γ x a) b (rename (replace_tag x) b') ;
   unify_same Γ _ _ := ret false.
 
-  Lemma well_typed_lam {s x} Σ (Γ : context ∅ s) ty body :
-    well_typed Σ Γ (TLam x ty body) ->
-    well_typed Σ Γ ty /\ well_typed Σ (CCons Γ x ty) body.
-Proof. Admitted.
 
-  Lemma well_typed_rename {s s'} Σ Γ Δ (ρ : ren s s') t :
+  (** In a typing derivation, we can change the context to a convertible one
+      so long as the new context is well-typed. *)
+  Lemma typing_cconv flags {Σ s} (Γ Γ' : context ∅ s) t T (HΣ : typing_evar_map Σ)  :
+    cconv flags Σ Γ Γ' ->
+    ctyping Σ Γ' ->
+    Σ ;; Γ ⊢ t : T ->
+    Σ ;; Γ' ⊢ t : T.
+  Proof. Admitted.
+
+  Lemma well_typed_cconv flags {Σ s} (Γ Γ' : context ∅ s) t (HΣ : typing_evar_map Σ) :
+    cconv flags Σ Γ Γ' ->
+    ctyping Σ Γ' ->
     well_typed Σ Γ t ->
-    rtyping Σ Γ ρ Δ ->
-    well_typed Σ Δ (rename ρ t).
-Proof. Admitted.
+    well_typed Σ Γ' t.
+  Proof.
+  intros Hconv Htyp (T & Ht). exists T. eapply typing_cconv ; eauto.
+  Qed.
 
   Lemma wp_unify_same Σ {s} (Γ : context ∅ s) t u :
     typing_evar_map Σ ->
@@ -346,17 +339,39 @@ Proof. Admitted.
   intros HΣ Ht Hu. funelim (unify_same Γ t u) ; simpl_wp ; try reflexivity.
   - split3 ; easy.
   - destruct (index_eq_spec x y) ; subst ; easy.
-  - apply_wp wp_unify ; try easy.
+  - change_tag y with x. apply_wp wp_unify ; try easy.
     + now apply well_typed_lam in Ht.
     + now apply well_typed_lam in Hu.
     + intros [] Σ' ; [| auto]. intros (Hincl & HΣ' & Hconv). apply_wp wp_unify.
       * assumption.
       * apply (well_typed_extend_evm Hincl). now apply well_typed_lam in Ht.
-      * apply (well_typed_extend_evm Hincl).
-        assert (y = x) as -> by (now destruct x ; destruct y).
-        assert (@replace_tag s x x = rid) as -> by now destruct x.
-        simpl_subst.
-        rewrite rename_rid. now apply well_typed_lam in Hu.
+      * simpl_subst. apply well_typed_lam in Hu. destruct Hu as (Hty' & Hbody').
+        eapply well_typed_cconv with (Γ := CCons Γ x ty') (flags := red_flags_all).
+        --assumption.
+        --now constructor.
+        --apply (ctyping_extend_evm Hincl). apply well_typed_lam in Ht.
+          destruct Ht as [_ [? Ht]]. now apply typing_context_validity in Ht.
+        --now apply (well_typed_extend_evm Hincl).
+      * intros [] Σ'' ; [| auto]. simpl_subst. intros (Hincl' & HΣ'' & Hconv').
+        split3 ; [etransitivity ; eauto | assumption |].
+        f_equiv ; [apply (conv_extend_evm Hincl') |] ; assumption.
+  - change_tag y with x. apply_wp wp_unify ; try easy.
+    + now apply well_typed_prod in Ht.
+    + now apply well_typed_prod in Hu.
+    + intros [] Σ' ; [| auto]. intros (Hincl & HΣ' & Hconv). apply_wp wp_unify.
+      * assumption.
+      * apply (well_typed_extend_evm Hincl). now apply well_typed_prod in Ht.
+      * simpl_subst. apply well_typed_prod in Hu. destruct Hu as (Ha' & Hb').
+        eapply well_typed_cconv with (Γ := CCons Γ x a') (flags := red_flags_all).
+        --assumption.
+        --now constructor.
+        --apply (ctyping_extend_evm Hincl). apply well_typed_prod in Ht.
+          destruct Ht as [_ [? Ht]]. now apply typing_context_validity in Ht.
+        --now apply (well_typed_extend_evm Hincl).
+      * intros [] Σ'' ; [| auto]. simpl_subst. intros (Hincl' & HΣ'' & Hconv').
+        split3 ; [etransitivity ; eauto | assumption |].
+        f_equiv ; [apply (conv_extend_evm Hincl') |] ; assumption.
+  Qed.
 
   (** Rule APP-FO. *)
   Equations unify_app_fo :
@@ -366,10 +381,60 @@ Proof. Admitted.
     then unify_list Γ (f :: args) (f' :: args')
     else ret false.
 
+  Lemma wp_unify_app_fo Σ s (Γ : context ∅ s) (t u : stack s) :
+    typing_evar_map Σ ->
+    well_typed Σ Γ (zip t) ->
+    well_typed Σ Γ (zip u) ->
+    wp h _ (unify_app_fo Γ t u) (fun b Σ' =>
+      if b then Σ ⊑ Σ' /\ typing_evar_map Σ' /\ Σ' ⊢ zip t ≡ zip u
+      else Σ' = Σ) Σ.
+  Proof.
+  intros HΣ Ht Hu. funelim (unify_app_fo Γ _ _).
+  unfold zip in Ht, Hu. cbn in Ht, Hu.
+  destruct (PeanoNat.Nat.eqb_spec (List.length args) (List.length args')).
+  - apply_wp wp_unify_list.
+    + assumption.
+    + apply well_typed_app in Ht. now constructor.
+    + apply well_typed_app in Hu. now constructor.
+    + cbn. lia.
+    + intros [] Σ' ; [| auto]. intros (Hincl & HΣ' & Hconv).
+      split3 ; [assumption .. |]. unfold zip. cbn. depelim Hconv.
+      now rewrite H, Hconv.
+  - simpl_wp. reflexivity.
+  Qed.
+
   (** Rule BETA-LEFT. *)
   Equations unify_beta_l : forall {s}, context ∅ s -> stack s -> stack s -> meta E bool :=
   unify_beta_l Γ (TLam x ty body, arg :: args) u := unify_stack Γ (body[x := arg], args) u ;
   unify_beta_l _ _ _ := ret false.
+
+  Instance well_typed_red flags Σ s (Γ : context ∅ s) :
+    typing_evar_map Σ ->
+    Proper (red flags Σ ==> impl) (well_typed Σ Γ).
+  Proof. Admitted.
+
+  Existing Class typing_evar_map.
+
+  Lemma wp_unify_beta_l Σ {s} (Γ : context ∅ s) t u :
+    typing_evar_map Σ ->
+    well_typed Σ Γ (zip t) ->
+    well_typed Σ Γ (zip u) ->
+    wp h _ (unify_beta_l Γ t u) (fun b Σ' =>
+      if b then Σ ⊑ Σ' /\ typing_evar_map Σ' /\ Σ' ⊢ zip t ≡ zip u
+      else Σ' = Σ) Σ.
+  Proof.
+  intros HΣ Ht Hu. funelim (unify_beta_l Γ t u) ; simpl_wp ; try reflexivity.
+  apply_wp wp_unify_stack.
+  - assumption.
+  - unfold zip in Ht |- * ; cbn in Ht |- *.
+    (*unfold well_typed in Ht |- *. destruct Ht as (T & Ht). exists T.
+    Fail rewrite red_beta in Ht.*)
+    rewrite red_beta with (flags := red_flags_all) in Ht by auto.
+    assumption.
+  - assumption.
+  - intros [] Σ' ; [| auto]. intros (Hincl & HΣ' & Hconv). split3 ; [assumption.. |].
+    unfold zip in Hconv |- *. cbn in Hconv |- *. now rewrite red_beta.
+  Qed.
 
   (** Rule BETA-RIGHT. *)
   Equations unify_beta_r : forall {s}, context ∅ s -> stack s -> stack s -> meta E bool :=

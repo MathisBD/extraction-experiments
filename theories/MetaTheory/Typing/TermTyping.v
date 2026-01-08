@@ -379,3 +379,52 @@ intros H. depind H.
 - destruct IHtyping1 as (entry & H2 & H3). exists entry.
   split ; auto. now rewrite <-H0.
 Qed.
+
+(***********************************************************************)
+(** * Well-typed judgement. *)
+(***********************************************************************)
+
+(** [well_typed Σ Γ t] means that term [t] is well-typed for some
+    (unknown) type. *)
+Definition well_typed (Σ : evar_map) {s} (Γ : context ∅ s) (t : term s) : Prop :=
+  exists T, Σ ;; Γ ⊢ t : T.
+
+Lemma well_typed_extend_evm {Σ1 Σ2 s} {Γ : context ∅ s} {t} :
+  Σ1 ⊑ Σ2 ->
+  well_typed Σ1 Γ t ->
+  well_typed Σ2 Γ t.
+Proof.
+intros HΣ (T & Ht). exists T. now apply (typing_extend_evm HΣ).
+Qed.
+
+(***********************************************************************)
+(** * Inversion lemmas for [well_typed]. *)
+(***********************************************************************)
+
+(** The following lemmas are not always the most precise:
+    they lose the relationships between the types of a term
+    and of its subterm.
+    Consider reasoning directly on [typing] if needed.
+*)
+
+Lemma well_typed_lam {s x} Σ (Γ : context ∅ s) ty body :
+  well_typed Σ Γ (TLam x ty body) ->
+  well_typed Σ Γ ty /\ well_typed Σ (CCons Γ x ty) body.
+Proof.
+intros (T & H). apply typing_lam_inv in H. firstorder.
+Qed.
+
+Lemma well_typed_prod {s x} Σ (Γ : context ∅ s) a b :
+  well_typed Σ Γ (TProd x a b) ->
+  well_typed Σ Γ a /\ well_typed Σ (CCons Γ x a) b.
+Proof.
+intros (T & H). apply typing_prod_inv in H. firstorder.
+Qed.
+
+Lemma well_typed_app Σ {s} (Γ : context ∅ s) f args :
+  well_typed Σ Γ (TApp f args) ->
+  well_typed Σ Γ f /\ Forall (well_typed Σ Γ) args.
+Proof.
+intros (T & H). apply typing_app_inv in H. destruct H as (f_ty & T' & Hf & Hspine & _).
+split ; [firstorder |]. clear f Hf. depind Hspine ; constructor ; firstorder.
+Qed.

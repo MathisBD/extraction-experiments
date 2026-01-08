@@ -4,8 +4,10 @@ From Metaprog Require Export Control.Meta MetaTheory.EvarMap Logic.Lattice.
 (** This module defines the program logic and proves some basic properties
     which are independent of the set of effects.
 
-    We provide a tactic [simpl_wp] which simplifies specific uses of [wp],
-    e.g. [wp h _ (ret x) Φ g] is simplified to [Φ x g]. *)
+    We provide tactics to manipulate weakest preconditions:
+    - [simpl_wp] and [simpl_wp in H] simplify specific uses of [wp],
+      e.g. [wp h _ (ret x) Φ g] is simplified to [Φ x g].
+    - [apply_wp x] to apply wp lemmas modulo the consequence rule. *)
 
 (** [gstate] is the ghost state we use when verifying meta-programs
     using the program logic. *)
@@ -353,3 +355,15 @@ Ltac simpl_wp :=
 (** Same as [simpl_wp] but works on a hypothesis [H]. *)
 Tactic Notation "simpl_wp" "in" hyp(H) :=
   repeat rewrite_strat (hints wp) in H.
+
+(**************************************************************************)
+(** * [apply_wp] tactic. *)
+(**************************************************************************)
+
+(** [apply_wp L] applies the lemma [L] with conclusion [wp h A m ?Φ g]
+    to a goal [wp h A m ?Φ' g] with a different postcondition, using
+    the consequence rule to bridge the gap between [Φ] and [Φ']. *)
+Ltac apply_wp L :=
+  (* We use [cycle 1] to move the most interesting goal
+     [forall x g, Φ x g -> Φ' x g] to the end. *)
+  eapply wp_consequence ; [| eapply L] ; cycle 1.

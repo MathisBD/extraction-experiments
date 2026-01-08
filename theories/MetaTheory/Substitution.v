@@ -10,10 +10,11 @@ From Metaprog Require Export Data.Term.
     We provide a few tactics to reason about renamings and substitutions:
     - [ren_ext i] and [subst_ext i] are the analogs of [fun_ext i] for renamings
       and substitutions.
+    - [change_tag x with y] replaces all occurences of tag [x] with tag [y].
     - [simpl_subst] repeatedly rewrites with lemmas which simplify renamings
       and substitutions. A version [simpl_subst in H] is also available to
       simplify in hypothesis [H]. Note that [simpl_subst] will unfold
-      [wk] as this is almost always what you want when doing proofs.
+      [wk] as this is usually what you want when doing proofs.
 *)
 
 (***********************************************************************)
@@ -54,6 +55,18 @@ Tactic Notation "thin_ext" ident(i) := apply thin_ext ; intros i.
 
 (** Extentionality tactic for substitutions. *)
 Tactic Notation "subst_ext" ident(i) := apply subst_ext ; intros i.
+
+(***********************************************************************)
+(** * [change_tag] tactic. *)
+(***********************************************************************)
+
+Lemma tag_eq (x y : tag) : x = y.
+Proof. destruct x ; destruct y ; reflexivity. Qed.
+
+(** [change_tag x with y] replaces all occurences of tag [x] with tag [y],
+    and removes [y] from the proof context. *)
+Tactic Notation "change_tag" constr(x) "with" constr(y) :=
+  assert (x = y) as -> by exact (tag_eq x y).
 
 (***********************************************************************)
 (** * [simpl_subst] tactic. *)
@@ -147,6 +160,11 @@ Lemma wk_idx_incl_extend {x s s'} (H : ScopeIncl s s') :
   @wk_idx _ _ (scope_incl_extend x s s' H) = rup x wk_idx.
 Proof. reflexivity. Qed.
 #[export] Hint Rewrite @wk_idx_incl_extend : subst.
+
+Lemma replace_tag_same {x s} :
+  @replace_tag s x x = rid.
+Proof. destruct x. reflexivity. Qed.
+#[export] Hint Rewrite @replace_tag_same : subst.
 
 (***********************************************************************)
 (** * Lemmas about [apps]. *)
