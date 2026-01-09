@@ -80,26 +80,27 @@ Qed.
 (** * Diamond property implies confluence. *)
 (***********************************************************************)
 
-Definition diamond {A} (R1 R2 : A -> A -> Prop) : Prop :=
-  forall x y1 y2,
+Definition diamond {A} (R1 R2 : A -> A -> Prop) (x : A) : Prop :=
+  forall y1 y2,
     R1 x y1 ->
     R2 x y2 ->
     exists z, R2 y1 z /\ R1 y2 z.
 
-Lemma diamond_sym {A} (R1 R2 : A -> A -> Prop) :
-  diamond R1 R2 <-> diamond R2 R1.
+Lemma diamond_sym {A} (R1 R2 : A -> A -> Prop) x :
+  diamond R1 R2 x <-> diamond R2 R1 x.
 Proof.
-enough (forall (R1 R2 : A -> A -> Prop), diamond R1 R2 -> diamond R2 R1) by firstorder.
+enough (forall (R1 R2 : A -> A -> Prop), diamond R1 R2 x -> diamond R2 R1 x) by firstorder.
 clear R1 R2. intros R1 R2 H. unfold diamond in *.
-intros x y1 y2 H1 H2. specialize (H x y2 y1 H2 H1). firstorder.
+intros y1 y2 H1 H2. specialize (H y2 y1 H2 H1). firstorder.
 Qed.
 
 Lemma diamond_clos_left {A} (R R' : A -> A -> Prop) :
-  diamond R R' -> diamond (refl_trans_clos R) R'.
+  (forall t, diamond R R' t) ->
+  (forall t, diamond (refl_trans_clos R) R' t).
 Proof.
 intros Hdiamond t x y Hx Hy. induction Hx as [t | t x1 x2 Hx1 IH Hx2].
 - exists y. now split.
-- destruct (IH Hy) as (u & Hu1 & Hz2). specialize (Hdiamond x1 x2 u Hx2 Hu1).
+- destruct (IH Hy) as (u & Hu1 & Hu2). specialize (Hdiamond _ _ _ Hx2 Hu1).
   destruct Hdiamond as (v & Hv1 & Hv2). exists v. split.
   + assumption.
   + transitivity u ; [assumption |]. now apply refl_trans_clos_one.
@@ -107,8 +108,9 @@ Qed.
 
 (** The diamond property implies confluence. *)
 Lemma diamond_confluence {A} (R : A -> A -> Prop) :
-  diamond R R -> diamond (refl_trans_clos R) (refl_trans_clos R).
+  (forall x, diamond R R x) ->
+  (forall x, diamond (refl_trans_clos R) (refl_trans_clos R) x).
 Proof.
-intros H. apply diamond_clos_left. rewrite diamond_sym.
+intros H. apply diamond_clos_left. intros t. rewrite diamond_sym. revert t.
 apply diamond_clos_left. assumption.
 Qed.

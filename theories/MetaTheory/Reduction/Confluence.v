@@ -431,60 +431,68 @@ Section JoinabilityLemmas.
     joinable flags Σ t (TApp u []).
   Proof. intros H. symmetry. now apply joinable_empty_app_l. Qed.
 
-  (*Lemma joinable_merge_app_l {s} (f t : term s) args1 args2 :
-    joinable flags Σ (TApp (TApp f args1) args2) t ->
-    joinable flags Σ (TApp f (args1 ++ args2)) t.
-  Proof.
-  intros (v & H1 & H2). exists v. split ; [|assumption].
-  clear H2. depelim H1.
-  - rewrite app_nil_r. assumption.
-  - apply pred1_app ; auto. apply All2_app ; assumption.
-  - depelim H1.
-    + admit.
-    + cbn. now apply pred1_app.
-    + *)
-
-
-  (*Lemma joinable_nested_app {s} (f f' : term s) args args1 args2 :
-    joinable flags Σ f (TApp f' args1) ->
-    All2 (joinable flags Σ) args args2 ->
-    joinable flags Σ (TApp f args) (TApp f' (args1 ++ args2)).
-  Proof.
-  intros (t & H1 & H2) H. apply joinable_list in H. destruct H as (args0 & H3 & H4).
-  exists (TApp t args0). split.
-  - now apply pred1_app.
-  - apply pred1_
-  Admitted.*)
-
-
 (*
 
-((t xs) ys) zs  >>  txs' (ys' ++ zs')
+t1 xs >> t2 ->?
+t1 (xs ++ ys) >> apps t2 ys
 
-v                              v
-v                              v
+beta reduction:
+(λ body) (x :: xs) >> (body[x]) xs
+(λ body) (x :: xs ++ ys) >> (body[x]) (xs ++ ys)
 
-(t'' (xs'' ++ ys'')) zs''       >>  t0 (xs0 ++ ys0)
+app reduction:
+t1 xs >> t1' xs'
+t1 (xs ++ ys) >> t1' (xs' ++ ys')
+
+empty app reduction:
+t1 [] >> t1
+t1 ([] ++ ys) >> apps t1 ys    because (t xs >> apps t xs)
+
+nested app reduction:
+(t1 xs) xs' >> t1 (xs ++ xs')
+(t1 xs) (xs' ++ ys) >> t1 (xs ++ xs' ++ ys)
+
+
+(t []) [] >> t []
+v            v
+v            v
+t     >>     t
+
 
 *)
 
-  Lemma aux1 {s x} t t' (arg arg' : term s) args1 args1' args2 args2' :
+  (*Definition apps {s} (f : term s) (xs : list (term s)) : term s :=
+    match f with
+    | TApp f args => TApp f (args ++ xs)
+    | _ => TApp f xs
+    end.
+
+  Lemma pred1_app_extend {s} (t1 t2 : term s) xs ys ys' :
+    All2 (pred1 flags Σ) ys ys' ->
+    Σ ⊢ TApp t1 xs >>{flags} t2 ->
+    Σ ⊢ TApp t1 (xs ++ ys) >>{flags} apps t2 ys'.
+  Proof.
+  intros Hys H. depelim H ; cbn.
+  - apply pred1_beta ; auto. now apply All2_app.
+  - depelim H ; cbn.
+    + apply pred1_nested_app.
+  - rewrite <-app_assoc. apply pred1_nested_app ; auto. now apply All2_app.
+  - apply pred1_app ; auto. now apply All2_app.*)
+
+  Lemma aux1 {s x} ty t t' (arg arg' : term s) args1 args1' args2 args2' :
+    flags.(beta) = true ->
     joinable flags Σ t t' ->
     joinable flags Σ arg arg' ->
     All2 (joinable flags Σ) args1 args1' ->
     All2 (joinable flags Σ) args2 args2' ->
-    joinable flags Σ (TApp (TApp (t[x := arg]) args1) args2) (TApp (t'[x := arg']) (args1' ++ args2')).
+    joinable flags Σ (TApp (TLam x ty t) (arg :: args1 ++ args2)) (TApp (TApp (t'[x := arg']) args1') args2').
   Proof.
-  intros (t0 & Ht & Ht') (arg0 & Harg & Harg') H1 H2.
+  intros Hf (t0 & Ht & Ht') (arg0 & Harg & Harg') H1 H2.
   apply joinable_list in H1, H2.
   destruct H1 as (args1_0 & Hargs1 & Hargs1'). destruct H2 as (args2_0 & Hargs2 & Hargs2').
   exists (TApp (t0[x := arg0]) (args1_0 ++ args2_0)). split.
-  - apply pred1_nested_app ; try assumption. apply pred1_substitute.
-    + now apply pred1_scons.
-    + assumption.
-  - apply pred1_app.
-    + apply pred1_substitute ; auto. now apply pred1_scons.
-    + now apply All2_app.
+  - apply pred1_beta ; auto. now apply All2_app.
+  - apply pred1_nested_app ; auto. apply pred1_substitute ; auto. now apply pred1_scons.
   Qed.
 
   Lemma aux2 {s} (t t' : term s) args1 args1' args2 args2' :
@@ -500,6 +508,7 @@ v                              v
   - apply pred1_app ; auto. now apply All2_app.
   Qed.
 
+
 End JoinabilityLemmas.
 
 (***********************************************************************)
@@ -509,71 +518,141 @@ End JoinabilityLemmas.
 Section DiamondPred1.
   Context {flags : red_flags} {Σ : evar_map}.
 
-  (** Just a weird consequence lemma for [All2] needed to prove the diamond property. *)
-  Lemma All2_weird_consequence {A} (P Q R : A -> A -> Prop) xs ys zs :
-    (forall x y z, P y x -> Q y z -> R x z) ->
-    All2 P ys xs -> All2 Q ys zs -> All2 R xs zs.
+  Lemma All2_joinable {s} {args args1 args2 : list (term s)} :
+    All2 (pred1 flags Σ) args args1 ->
+    All2 (pred1 flags Σ) args args2 ->
+    Forall (diamond (pred1 flags Σ) (pred1 flags Σ)) args ->
+    All2 (joinable flags Σ) args1 args2.
   Proof.
-  intros H HP HQ. revert zs HQ. depind HP ; intros zs HQ ; depelim HQ ; constructor.
-  - firstorder.
-  - firstorder.
+  revert args1 args2. induction args ; intros args1 args2 H1 H2 H.
+  - depelim H1. depelim H2. constructor.
+  - depelim H1. depelim H2. constructor.
+    + depelim H3. now apply H3.
+    + apply IHargs ; auto. now depelim H3.
   Qed.
 
-  (** [pred1] has the diamond property. *)
-  Lemma pred1_diamond_aux {s} (t u1 u2 : term s) :
-    Σ ⊢ t >>{flags} u1 -> Σ ⊢ t >>{flags} u2 -> joinable flags Σ u1 u2.
+  #[local] Ltac solve_size :=
+    first [ assumption
+          | (repeat first [ progress simp term_size sum | progress cbn ]) ; lia
+          | idtac ].
+
+  Lemma Forall_term_size s (P : term s -> Prop) args :
+    (forall t, term_size t <= sum (map term_size args) -> P t) ->
+    Forall P args.
   Proof.
-  intros H1 H2. depind H1 ; depelim H2 ; try reflexivity.
+  intros H. induction args ; constructor.
+  - apply H. solve_size.
+  - apply IHargs. intros t Ht. apply H. solve_size.
+  Qed.
+
+  (*Lemma joinable_app_extend {s} (t t' : term s) xs' ys ys' :
+    joinable flags Σ t (TApp t' xs') ->
+    All2 (joinable flags Σ) ys ys' ->
+    joinable flags Σ (TApp t ys) (TApp t' (xs' ++ ys')).
+  Proof.
+  revert ys ys'.*)
+
+
+  (** [pred1] has the diamond property. *)
+  Lemma pred1_diamond {s} (t : term s) :
+    diamond (pred1 flags Σ) (pred1 flags Σ) t.
+  Proof.
+  (* The proof is by induction on the size of [t], then inspecting
+     the shape of both reductions from [t]. *)
+  remember (term_size t) as n. revert s t Heqn. induction n using Wf_nat.lt_wf_ind.
+  intros s t -> u1 u2 Hu1 Hu2.
+  assert (IH : forall s (x : term s),
+    term_size x < term_size t -> diamond (pred1 flags Σ) (pred1 flags Σ) x) by firstorder.
+  clear H. change (joinable flags Σ u1 u2).
+  depelim Hu1 ; depelim Hu2 ; try reflexivity.
   - apply joinable_app ; [apply joinable_substitute ; [| apply joinable_scons] |].
-    + now apply IHpred1_1.
-    + now apply IHpred1_2.
+    + apply IH with body ; solve_size.
+    + apply IH with arg ; solve_size.
     + reflexivity.
-    + revert H1 H3. apply All2_weird_consequence. firstorder.
-  - depelim H3. depelim H2. eapply joinable_beta_l.
+    + apply (All2_joinable H0 H2), Forall_term_size.
+      intros t Ht. apply IH. solve_size.
+  - depelim H1. depelim Hu2. eapply joinable_beta_l.
     + assumption.
-    + now apply IHpred1_1.
-    + now apply IHpred1_2.
-    + revert H1 H4. apply All2_weird_consequence. firstorder.
+    + apply IH with body ; solve_size.
+    + apply IH with arg ; solve_size.
+    + apply (All2_joinable H0 H2), Forall_term_size.
+      intros t Ht. apply IH. solve_size.
   - rewrite H0 in H2. depelim H2. reflexivity.
   - exists (wk def). split ; [reflexivity |]. econstructor ; eassumption.
-  - firstorder.
-  - depelim H0. rewrite app_nil_r. apply IHpred1. now apply pred1_app.
-  - depelim H. apply joinable_empty_app_r. now apply IHpred1.
-  - rewrite app_nil_r. depelim H4.
-    + admit.
-    + depelim H5. rewrite app_nil_r. apply IHpred1 in H4. apply joinable_app ; auto.
-      revert H0 H2. apply All2_weird_consequence. firstorder.
-    + depelim H2. clear H3. apply joinable_empty_app_r. depelim H4.
-      * depelim H0. depelim H. specialize (IHpred1 (TLam x ty body')).
-        forward IHpred1. { now apply pred1_lam. }
-        destruct IHpred1 as (v & Hv1 & Hv2). admit.
-      * depelim H. apply joinable_empty_app_l. now apply IHpred1.
-      * specialize (IHpred1 (TApp f'1 args1'0)). forward IHpred1. { now apply pred1_app. }
-        assert (H5 : All2 (joinable flags Σ) args1' args2').
-        { revert H0 H3. apply All2_weird_consequence. firstorder. }
-        admit.
-      * apply IHpred1 in H4. apply joinable_app ; auto.
-        (* ok. *) admit.
+  - apply IH with f ; solve_size.
+  - depelim H0. rewrite app_nil_r. apply IH with (TApp f0 args1) ; solve_size.
+    now apply pred1_app.
+  - depelim H. apply joinable_empty_app_r. apply IH with f ; solve_size.
+  - depelim H0. rewrite app_nil_r. apply IH with (TApp f args1) ; solve_size.
+    now apply pred1_app.
+  - apply joinable_app ; [| apply All2_app].
+    + apply IH with f ; solve_size.
+    + apply (All2_joinable H H1), Forall_term_size.
+      intros t Ht. apply IH. solve_size.
+    + apply (All2_joinable H0 H2), Forall_term_size.
+      intros t Ht. apply IH. solve_size.
   - admit.
-  - apply joinable_lam ; auto.
-  - apply joinable_prod ; auto.
-  - depelim H1. depelim H. depelim H1.
-    specialize (IHpred1 (TLam x ty' body')). feed IHpred1. { now apply pred1_lam. }
-    destruct IHpred1 as (z & Hz1 & Hz2). depelim Hz1. depelim Hz2.
-    symmetry. eapply joinable_beta_l.
-    + eassumption.
-    + eexists ; eauto.
-    + symmetry. auto.
-    + revert H4 H2. apply All2_weird_consequence. firstorder.
-  - depelim H. apply joinable_empty_app_l. now apply IHpred1.
-  - specialize (IHpred1 (TApp f'0 args1')). forward IHpred1. { now apply pred1_app. }
-    admit.
-  - apply joinable_app ; auto. revert H0 H3. apply All2_weird_consequence. firstorder.
+  (*TApp f (args1 ++ args2) >> TApp f' (args1' ++ args2')
+    TApp f (args1 ++ args2) >> apps f'0 args2'
+  remember (term_size f'0) as n.
+    revert args' args1 args1' args2 args2' f f' f'0 Heqn Hu1 H H0 Hu2 H1 IH.
+    induction n using Wf_nat.lt_wf_ind. rename H into IHf.
+    intros args' args1 args1' args2 args2' f f' f'0 -> Hu1 H H0 Hu2 H1 IH.
+    depelim Hu2.
+    + depelim Hu1. depelim H. cbn. apply aux1 ; auto.
+      * apply IH with body ; solve_size.
+      * apply IH with arg ; solve_size.
+      * apply (All2_joinable H0 H3), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+      * apply (All2_joinable H1 H4), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+    + depelim H. cbn. apply IH with (TApp f args2) ; solve_size.
+      * now apply pred1_app.
+      * now apply pred1_app.
+    + eapply IHf ; [| reflexivity | ..]. with (f := TApp f0 args0) ; [| reflexivity | ..]. ; auto.
+    + symmetry. apply aux2.
+      * apply IH with f ; solve_size.
+      * apply (All2_joinable H1 H), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+      * apply (All2_joinable H2 H0), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+    (*+ depelim Hu1. depelim H. cbn. apply aux1 ; auto.
+      * apply IH with body ; solve_size.
+      * apply IH with arg ; solve_size.
+      * apply (All2_joinable H0 H3), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+      * apply (All2_joinable H1 H4), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+    + depelim H. cbn. apply IH with (TApp f args2) ; solve_size.
+      * now apply pred1_app.
+      * now apply pred1_app.
+    + admit.
+    + symmetry. apply aux2.
+      * apply IH with f ; solve_size.
+      * apply (All2_joinable H1 H), Forall_term_size.
+        intros t Ht. apply IH. solve_size.
+      * apply (All2_joinable H2 H0), Forall_term_size.
+        intros t Ht. apply IH. solve_size.*)*)
+  - apply joinable_lam.
+    + apply IH with ty ; solve_size.
+    + apply IH with body ; solve_size.
+  - apply joinable_prod.
+    + apply IH with a ; solve_size.
+    + apply IH with b ; solve_size.
+  - depelim Hu1. depelim H. symmetry. eapply joinable_beta_l.
+    + assumption.
+    + apply IH with body ; solve_size.
+    + apply IH with arg ; solve_size.
+    + apply (All2_joinable H2 H0), Forall_term_size.
+      intros t Ht. apply IH. solve_size.
+  - depelim H. apply joinable_empty_app_l. apply IH with f ; solve_size.
+  - admit.
+  - apply joinable_app.
+    + apply IH with f ; solve_size.
+    + apply (All2_joinable H H0), Forall_term_size.
+      intros t Ht. apply IH. solve_size.
   - exists (wk def). split ; [|reflexivity]. econstructor ; eassumption.
   Admitted.
-
-  Lemma pred1_diamond {s} : diamond (@pred1 flags Σ s) (@pred1 flags Σ s).
-  Proof. intros t1 t2 u H1 H2. eapply pred1_diamond_aux ; eauto. Qed.
 
 End DiamondPred1.
 
