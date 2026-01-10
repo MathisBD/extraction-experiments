@@ -461,6 +461,31 @@ t     >>     t
 
 *)
 
+
+(*
+TApp (TApp t xs) ys >> TApp t1 (xs1 ++ ys1)
+  where t >> t1 and xs >> xs1 and ys >> ys1
+  (with rule pred1_nested_app)
+
+TApp (TApp t xs) ys >> TApp u2 ys2
+  where TApp t xs >> u2 and ys >> ys2
+  (with rule pred1_app)
+
+Case TApp t xs >> u2 with rule pred1_nested_app:
+  t = TApp f args
+  u2 = TApp f2 (args2 ++ xs2)
+    with f >> f2 and args >> args2 and xs >> xs2
+
+
+((t xs) ys) zs >> t1 (ys1 ++ zs1) where t xs >> t1
+v
+v
+(t2 (xs2 ++ ys2)) zs2 >>
+
+
+
+*)
+
   (*Definition apps {s} (f : term s) (xs : list (term s)) : term s :=
     match f with
     | TApp f args => TApp f (args ++ xs)
@@ -552,6 +577,11 @@ Section DiamondPred1.
   Proof.
   revert ys ys'.*)
 
+  Fixpoint app_depth {s} (t : term s) : nat :=
+    match t with
+    | TApp f _ => S (app_depth f)
+    | _ => 0
+    end.
 
   (** [pred1] has the diamond property. *)
   Lemma pred1_diamond {s} (t : term s) :
@@ -591,10 +621,9 @@ Section DiamondPred1.
       intros t Ht. apply IH. solve_size.
     + apply (All2_joinable H0 H2), Forall_term_size.
       intros t Ht. apply IH. solve_size.
-  - admit.
-  (*TApp f (args1 ++ args2) >> TApp f' (args1' ++ args2')
-    TApp f (args1 ++ args2) >> apps f'0 args2'
-  remember (term_size f'0) as n.
+  - (*TApp f (args1 ++ args2) >> TApp f' (args1' ++ args2')
+    TApp f (args1 ++ args2) >> apps f'0 args2'*)
+    remember (app_depth f) as n.
     revert args' args1 args1' args2 args2' f f' f'0 Heqn Hu1 H H0 Hu2 H1 IH.
     induction n using Wf_nat.lt_wf_ind. rename H into IHf.
     intros args' args1 args1' args2 args2' f f' f'0 -> Hu1 H H0 Hu2 H1 IH.
@@ -615,8 +644,9 @@ Section DiamondPred1.
       * apply (All2_joinable H1 H), Forall_term_size.
         intros t Ht. apply IH. solve_size.
       * apply (All2_joinable H2 H0), Forall_term_size.
-        intros t Ht. apply IH. solve_size.
-    (*+ depelim Hu1. depelim H. cbn. apply aux1 ; auto.
+        intros t Ht. apply IH. solve_size.*)
+    depelim Hu2.
+    + depelim Hu1. depelim H. cbn. apply aux1 ; auto.
       * apply IH with body ; solve_size.
       * apply IH with arg ; solve_size.
       * apply (All2_joinable H0 H3), Forall_term_size.
@@ -626,13 +656,21 @@ Section DiamondPred1.
     + depelim H. cbn. apply IH with (TApp f args2) ; solve_size.
       * now apply pred1_app.
       * now apply pred1_app.
-    + admit.
+    + apply IH with (TApp (TApp (TApp f0 args0) args1) args2).
+      * admit.
+      * apply pred1_app ; auto. now apply All2_app.
+      *
+     depelim Hu1.
+      * admit.
+      * admit.
+      *
+     admit.
     + symmetry. apply aux2.
       * apply IH with f ; solve_size.
       * apply (All2_joinable H1 H), Forall_term_size.
         intros t Ht. apply IH. solve_size.
       * apply (All2_joinable H2 H0), Forall_term_size.
-        intros t Ht. apply IH. solve_size.*)*)
+        intros t Ht. apply IH. solve_size.
   - apply joinable_lam.
     + apply IH with ty ; solve_size.
     + apply IH with body ; solve_size.
